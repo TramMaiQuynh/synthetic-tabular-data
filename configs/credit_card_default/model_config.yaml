@@ -1,0 +1,2 @@
+epochs: 120
+model_type: ctgan

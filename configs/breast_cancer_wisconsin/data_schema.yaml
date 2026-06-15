@@ -1,0 +1,99 @@
+PII_columns_to_drop:
+- ID
+categorical_features:
+  Diagnosis:
+  - M
+  - B
+continuous_features:
+  Feature_1:
+    max: 28.11
+    min: 6.981
+  Feature_10:
+    max: 0.09744
+    min: 0.04996
+  Feature_11:
+    max: 2.873
+    min: 0.1115
+  Feature_12:
+    max: 4.885
+    min: 0.3602
+  Feature_13:
+    max: 21.98
+    min: 0.757
+  Feature_14:
+    max: 542.2
+    min: 6.802
+  Feature_15:
+    max: 0.03113
+    min: 0.001713
+  Feature_16:
+    max: 0.1354
+    min: 0.002252
+  Feature_17:
+    max: 0.396
+    min: 0.0
+  Feature_18:
+    max: 0.05279
+    min: 0.0
+  Feature_19:
+    max: 0.07895
+    min: 0.007882
+  Feature_2:
+    max: 39.28
+    min: 9.71
+  Feature_20:
+    max: 0.02984
+    min: 0.0008948
+  Feature_21:
+    max: 36.04
+    min: 7.93
+  Feature_22:
+    max: 49.54
+    min: 12.02
+  Feature_23:
+    max: 251.2
+    min: 50.41
+  Feature_24:
+    max: 4254.0
+    min: 185.2
+  Feature_25:
+    max: 0.2226
+    min: 0.07117
+  Feature_26:
+    max: 1.058
+    min: 0.02729
+  Feature_27:
+    max: 1.252
+    min: 0.0
+  Feature_28:
+    max: 0.291
+    min: 0.0
+  Feature_29:
+    max: 0.6638
+    min: 0.1565
+  Feature_3:
+    max: 188.5
+    min: 43.79
+  Feature_30:
+    max: 0.2075
+    min: 0.05504
+  Feature_4:
+    max: 2501.0
+    min: 143.5
+  Feature_5:
+    max: 0.1634
+    min: 0.05263
+  Feature_6:
+    max: 0.3454
+    min: 0.01938
+  Feature_7:
+    max: 0.4268
+    min: 0.0
+  Feature_8:
+    max: 0.2012
+    min: 0.0
+  Feature_9:
+    max: 0.304
+    min: 0.106
+quasi_identifiers: []
+target_column: Diagnosis

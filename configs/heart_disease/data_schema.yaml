@@ -1,0 +1,53 @@
+PII_columns_to_drop: []
+categorical_features:
+  ca:
+  - 0.0
+  - 3.0
+  - 2.0
+  - 1.0
+  cp:
+  - 1.0
+  - 4.0
+  - 3.0
+  - 2.0
+  exang:
+  - 0.0
+  - 1.0
+  fbs:
+  - 1.0
+  - 0.0
+  restecg:
+  - 2.0
+  - 0.0
+  - 1.0
+  sex:
+  - 1.0
+  - 0.0
+  slope:
+  - 3.0
+  - 2.0
+  - 1.0
+  thal:
+  - 6.0
+  - 3.0
+  - 7.0
+continuous_features:
+  age:
+    max: 77.0
+    min: 29.0
+  chol:
+    max: 564.0
+    min: 126.0
+  oldpeak:
+    max: 6.2
+    min: 0.0
+  thalach:
+    max: 202.0
+    min: 71.0
+  trestbps:
+    max: 200.0
+    min: 94.0
+quasi_identifiers:
+- age
+- sex
+target_column: target

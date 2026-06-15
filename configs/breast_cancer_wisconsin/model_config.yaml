@@ -1,0 +1,2 @@
+epochs: 200
+model_type: diffusion

@@ -1,0 +1,30 @@
+columns:
+- age
+- workclass
+- fnlwgt
+- education
+- education-num
+- marital-status
+- occupation
+- relationship
+- race
+- sex
+- capital-gain
+- capital-loss
+- hours-per-week
+- native-country
+- income
+has_header: false
+na_values:
+- '?'
+pii_columns_to_drop: []
+quasi_identifiers:
+- age
+- workclass
+- education
+- marital-status
+- race
+- sex
+- native-country
+separator: ',\s*'
+target_column: income

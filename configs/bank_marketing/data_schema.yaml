@@ -1,0 +1,102 @@
+PII_columns_to_drop: []
+categorical_features:
+  contact:
+  - telephone
+  - cellular
+  day_of_week:
+  - mon
+  - tue
+  - wed
+  - thu
+  - fri
+  default:
+  - 'no'
+  - unknown
+  - 'yes'
+  education:
+  - basic.4y
+  - high.school
+  - basic.6y
+  - basic.9y
+  - professional.course
+  - unknown
+  - university.degree
+  - illiterate
+  housing:
+  - 'no'
+  - 'yes'
+  - unknown
+  job:
+  - housemaid
+  - services
+  - admin.
+  - blue-collar
+  - technician
+  - retired
+  - management
+  - unemployed
+  - self-employed
+  - unknown
+  - entrepreneur
+  - student
+  loan:
+  - 'no'
+  - 'yes'
+  - unknown
+  marital:
+  - married
+  - single
+  - divorced
+  - unknown
+  month:
+  - may
+  - jun
+  - jul
+  - aug
+  - oct
+  - nov
+  - dec
+  - mar
+  - apr
+  - sep
+  poutcome:
+  - nonexistent
+  - failure
+  - success
+continuous_features:
+  age:
+    max: 98.0
+    min: 17.0
+  campaign:
+    max: 56.0
+    min: 1.0
+  cons.conf.idx:
+    max: -26.9
+    min: -50.8
+  cons.price.idx:
+    max: 94.767
+    min: 92.201
+  duration:
+    max: 4918.0
+    min: 0.0
+  emp.var.rate:
+    max: 1.4
+    min: -3.4
+  euribor3m:
+    max: 5.045
+    min: 0.634
+  nr.employed:
+    max: 5228.1
+    min: 4963.6
+  pdays:
+    max: 999.0
+    min: 0.0
+  previous:
+    max: 7.0
+    min: 0.0
+quasi_identifiers:
+- age
+- job
+- marital
+- education
+target_column: y

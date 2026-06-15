@@ -1,0 +1,3 @@
+batch_size: 512
+epochs: 80
+model_type: diffusion
