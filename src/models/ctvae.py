@@ -325,7 +325,7 @@ class TabularCTVAE:
 
                 optimizer.zero_grad()
                 if dp_trainer is not None:
-                    dp_trainer.backward(loss, nn.ModuleList([self.encoder, self.decoder]), optimizer)
+                    dp_trainer.backward(loss, combined, optimizer)
                 else:
                     loss.backward()
                     optimizer.step()
@@ -442,6 +442,7 @@ class TabularCTVAE:
                 "latent_dim": self.latent_dim,
                 "hidden_dims": self.hidden_dims,
                 "beta": self.beta,
+                "constraint_penalty_weight": self.constraint_penalty_weight,
                 "categories": {
                     col: cats
                     for col, cats in zip(
@@ -462,6 +463,7 @@ class TabularCTVAE:
             latent_dim=ckpt["latent_dim"],
             hidden_dims=ckpt["hidden_dims"],
             beta=ckpt["beta"],
+            constraint_penalty_weight=ckpt.get("constraint_penalty_weight", 1.0),
             device=device,
         )
         instance.encoder.load_state_dict(ckpt["encoder_state"])

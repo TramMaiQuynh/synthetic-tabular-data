@@ -113,17 +113,20 @@ class _Constraint:
             logger.warning("torch not available — soft_penalty returns 0.")
             return 0.0
 
+        # Detect the device of the input tensors to prevent device mismatch errors
+        device = next(iter(tensor_dict.values())).device if tensor_dict else torch.device("cpu")
+
         if self.lhs_col not in tensor_dict:
-            return torch.tensor(0.0)
+            return torch.tensor(0.0, device=device)
 
         lhs_t = tensor_dict[self.lhs_col].float()
 
         if self.rhs_col is not None:
             if self.rhs_col not in tensor_dict:
-                return torch.tensor(0.0)
+                return torch.tensor(0.0, device=device)
             rhs_t = tensor_dict[self.rhs_col].float()
         else:
-            rhs_t = torch.tensor(float(self.rhs_scalar), dtype=torch.float32)
+            rhs_t = torch.tensor(float(self.rhs_scalar), dtype=torch.float32, device=device)
 
         # Compute violation as ReLU(-(lhs - rhs)) for ">=" / ">"
         # and ReLU(-(rhs - lhs)) for "<=" / "<"
@@ -301,7 +304,8 @@ class ConstraintsEngine:
         except ImportError:
             return 0.0
 
-        total = torch.tensor(0.0)
+        device = next(iter(tensor_dict.values())).device if tensor_dict else torch.device("cpu")
+        total = torch.tensor(0.0, device=device)
         for c in self._constraints:
             total = total + c.soft_penalty(tensor_dict)
         return total
@@ -466,7 +470,7 @@ class ConstraintsEngine:
         m = 0.5 * (p + q)
 
         def _kl(pk: np.ndarray, qk: np.ndarray) -> float:
-            return float(np.sum(pk * np.log(pk / qk + 1e-10)))
+            return float(np.sum(pk * np.log(pk / qk)))
 
         return 0.5 * _kl(p, m) + 0.5 * _kl(q, m)
 

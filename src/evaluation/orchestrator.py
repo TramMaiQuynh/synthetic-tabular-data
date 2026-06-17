@@ -84,6 +84,15 @@ class EvaluationSuite:
         active_continuous = [c for c in self.continuous_cols if c not in self.pii_columns]
         active_categorical = [c for c in self.categorical_cols if c not in self.pii_columns]
         
+        # Coerce continuous columns to numeric to prevent conversion errors during metrics calculation
+        real_df = real_df.copy()
+        synth_df = synth_df.copy()
+        for col in active_continuous:
+            if col in real_df.columns:
+                real_df[col] = pd.to_numeric(real_df[col], errors='coerce')
+            if col in synth_df.columns:
+                synth_df[col] = pd.to_numeric(synth_df[col], errors='coerce')
+        
         # Resolve target and sensitive columns
         t_col = target_col or self.target_col
         if not t_col:
@@ -102,6 +111,14 @@ class EvaluationSuite:
             real_shuffled = real_df.sample(frac=1.0, random_state=42).reset_index(drop=True)
             real_train_df = real_shuffled.iloc[:train_size].reset_index(drop=True)
             real_test_df = real_shuffled.iloc[train_size:].reset_index(drop=True)
+        else:
+            real_train_df = real_train_df.copy()
+            real_test_df = real_test_df.copy()
+            for col in active_continuous:
+                if col in real_train_df.columns:
+                    real_train_df[col] = pd.to_numeric(real_train_df[col], errors='coerce')
+                if col in real_test_df.columns:
+                    real_test_df[col] = pd.to_numeric(real_test_df[col], errors='coerce')
             
         # 3. Setup default pipeline loader function if not provided
         if pipeline_loader_fn is None:
@@ -151,7 +168,11 @@ class EvaluationSuite:
         corr_comp_path = visual_generator.plot_correlation_difference(
             fidelity_results["real_corr"], fidelity_results["synth_corr"]
         )
-        dcr_dist_path = visual_generator.plot_dcr_distribution(privacy_results["dcr_vals"])
+        dcr_leakage_threshold = privacy_results.get("dcr_leakage_threshold", 0.01)
+        dcr_dist_path = visual_generator.plot_dcr_distribution(
+            privacy_results["dcr_vals"],
+            leakage_threshold=dcr_leakage_threshold
+        )
         
         # L-4 fix: Safe relpath helper that handles cross-drive paths on Windows
         # (os.path.relpath raises ValueError when paths are on different drives)

@@ -119,21 +119,20 @@ def _calibrate_noise_multiplier(
 
 class _CustomDPOptimizer:
     """
-    Wraps a standard PyTorch optimiser with per-sample gradient clipping
-    and Gaussian noise injection.
+    Wraps a standard PyTorch optimiser with batch-level gradient clipping
+    and heuristic Gaussian noise injection.
 
-    Implementation:
-      1. `zero_grad()` clears accumulated gradients as usual.
-      2. `backward(loss)` computes per-sample gradients via gradient hooks on
-         leaf parameters, clips each sample's gradient l2-norm to max_grad_norm,
-         accumulates the clipped sum, adds Gaussian noise, then calls step().
+    CRITICAL NOTE: This custom backend is a HEURISTIC APPROXIMATION. It does
+    NOT compute per-sample gradients or register hooks. Instead, it clips
+    the average batch gradient computed by loss.backward() and adds noise.
+    Because it clips the batch gradient as a whole rather than clipping each
+    sample's gradient individually, the noise added is not properly calibrated
+    to the individual sample sensitivity.
 
-    NOTE: This implementation uses the standard `.backward()` + parameter
-    `.grad` approach which gives the *sum* of per-sample gradients (standard
-    mini-batch gradient). Per-sample clipping is approximated by scaling the
-    batch gradient norm. For exact per-sample clipping, Opacus is preferred.
-    This fallback provides a reasonable DP guarantee but with a slightly looser
-    epsilon bound.
+    Consequently, this fallback does NOT provide formal, mathematically rigorous
+    Differential Privacy guarantees. It should be used ONLY as a lightweight
+    computational fallback when Opacus is unavailable. For rigorous DP-SGD
+    guarantees, the Opacus backend must be used.
     """
 
     def __init__(
@@ -329,6 +328,11 @@ class DPTrainer:
                 self._active_backend = "custom"
 
         # Custom backend
+        logger.warning(
+            "CRITICAL DP WARNING: Custom DP-SGD backend is a heuristic approximation using batch-level gradient clipping. "
+            "It does NOT compute per-sample gradients and therefore does NOT provide formal, mathematically rigorous "
+            "Differential Privacy guarantees. For formal privacy guarantees, use backend='opacus'."
+        )
         wrapped = _CustomDPOptimizer(
             optimizer=optimizer,
             model=model if isinstance(model, nn.Module) else nn.ModuleList(list(model)),

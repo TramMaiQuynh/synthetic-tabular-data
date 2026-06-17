@@ -365,13 +365,24 @@ class HPORunner:
         reference_columns: List[str],
     ) -> pd.DataFrame:
         """Convert a generated tensor to a DataFrame with reference column names."""
-        arr = tensor.numpy()
+        arr = tensor.detach().cpu().numpy()
         cols: List[str] = []
         for meta in col_meta:
             if meta.col_type == "onehot":
-                # Reconstruct one-hot column names
+                # Reconstruct one-hot column names, avoiding prefix collisions
                 onehot_prefix = meta.name + "_"
-                matching = [c for c in reference_columns if c.startswith(onehot_prefix)]
+                matching = []
+                for c in reference_columns:
+                    if c.startswith(onehot_prefix):
+                        has_longer_match = False
+                        for other in col_meta:
+                            if other.col_type == "onehot" and other.name != meta.name:
+                                other_prefix = other.name + "_"
+                                if c.startswith(other_prefix) and len(other.name) > len(meta.name):
+                                    has_longer_match = True
+                                    break
+                        if not has_longer_match:
+                            matching.append(c)
                 cols.extend(sorted(matching)[:meta.dim])
             else:
                 cols.append(meta.name)

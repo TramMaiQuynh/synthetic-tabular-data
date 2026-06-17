@@ -172,6 +172,8 @@ class TabularDiffusion:
         self.hidden_dims = hidden_dims
         self.time_embed_dim = time_embed_dim
         self.constraint_penalty_weight = constraint_penalty_weight
+        self.beta_start = beta_start
+        self.beta_end = beta_end
 
         self.device = torch.device(
             device if device else ("cuda" if torch.cuda.is_available() else "cpu")
@@ -456,6 +458,9 @@ class TabularDiffusion:
                 "col_meta": self.col_meta,
                 "T": self.T,
                 "beta_schedule": self.beta_schedule,
+                "beta_start": self.beta_start,
+                "beta_end": self.beta_end,
+                "constraint_penalty_weight": self.constraint_penalty_weight,
                 "hidden_dims": self.hidden_dims,
                 "time_embed_dim": self.time_embed_dim,
                 "categories": {
@@ -477,8 +482,11 @@ class TabularDiffusion:
             categories=ckpt.get("categories", {}),
             T=ckpt["T"],
             beta_schedule=ckpt["beta_schedule"],
+            beta_start=ckpt.get("beta_start", 1e-4),
+            beta_end=ckpt.get("beta_end", 0.02),
             hidden_dims=ckpt["hidden_dims"],
             time_embed_dim=ckpt["time_embed_dim"],
+            constraint_penalty_weight=ckpt.get("constraint_penalty_weight", 1.0),
             device=device,
         )
         instance.denoiser.load_state_dict(ckpt["denoiser_state"])

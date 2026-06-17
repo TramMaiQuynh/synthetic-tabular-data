@@ -139,7 +139,7 @@ class SyntheticSampler:
         if os.path.exists(pipeline_path):
             from src.preprocessing.pipeline import PreprocessingPipeline
             self._pipeline = PreprocessingPipeline(dataset_name=self.dataset_name)
-            self._pipeline.load_artifacts()
+            self._pipeline.load_artifacts(pipeline_path)
             logger.info("Preprocessing pipeline loaded from '%s'.", pipeline_path)
         else:
             logger.warning(

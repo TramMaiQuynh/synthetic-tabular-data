@@ -83,9 +83,17 @@ def build_col_meta(
 
     # 2. Categorical columns — detect one-hot groups vs label-encoded
     for orig_col in categorical_cols:
-        # Detect one-hot columns generated from this original column
-        onehot_cols = [c for c in df.columns if c.startswith(f"{orig_col}_") and
-                       c not in [f"{orig_col}_is_missing"]]
+        # Detect one-hot columns generated from this original column, avoiding prefix collisions
+        onehot_cols = []
+        for c in df.columns:
+            if c.startswith(f"{orig_col}_") and c != f"{orig_col}_is_missing":
+                has_longer_match = False
+                for other_col in categorical_cols:
+                    if other_col != orig_col and c.startswith(f"{other_col}_") and len(other_col) > len(orig_col):
+                        has_longer_match = True
+                        break
+                if not has_longer_match:
+                    onehot_cols.append(c)
 
         if len(onehot_cols) > 1:
             # One-hot encoded
@@ -120,9 +128,18 @@ def _df_to_tensor(df: pd.DataFrame, col_meta: List[ColumnMeta]) -> torch.Tensor:
     parts: List[torch.Tensor] = []
     for meta in col_meta:
         if meta.col_type == "onehot":
-            # Find matching columns by prefix (e.g. "Contract_" → all one-hot columns)
-            actual_cols = sorted([c for c in df.columns if c.startswith(f"{meta.name}_") and
-                                   not c.endswith("_is_missing")])
+            # Find matching columns by prefix, avoiding collision with longer matching column names
+            actual_cols = []
+            for c in df.columns:
+                if c.startswith(f"{meta.name}_") and not c.endswith("_is_missing"):
+                    has_longer_match = False
+                    for other in col_meta:
+                        if other.col_type == "onehot" and other.name != meta.name and c.startswith(f"{other.name}_") and len(other.name) > len(meta.name):
+                            has_longer_match = True
+                            break
+                    if not has_longer_match:
+                        actual_cols.append(c)
+            actual_cols = sorted(actual_cols)
             if actual_cols:
                 chunk = torch.tensor(df[actual_cols].values, dtype=torch.float32)
             else:

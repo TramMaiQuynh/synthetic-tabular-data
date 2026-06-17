@@ -69,7 +69,7 @@ class ConfigLoader:
         Returns:
             dict: The loaded data schema dictionary.
         """
-        configs_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "configs"))
+        configs_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "config"))
         schema_path = os.path.join(configs_dir, dataset_name, "data_schema.yaml")
         if not os.path.exists(schema_path):
             raise FileNotFoundError(f"data_schema.yaml not found at {schema_path}")
@@ -84,7 +84,7 @@ class ConfigLoader:
         configurations, validates the merged result against the AppConfig Pydantic model,
         and returns it.
         """
-        configs_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "configs"))
+        configs_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "config"))
         default_path = os.path.join(configs_dir, "default_config.yaml")
         
         # 1. Load global default config

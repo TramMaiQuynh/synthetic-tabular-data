@@ -125,6 +125,9 @@ class TabularScaler:
                 col_max = self.maxs_[col]
                 rng = col_max - col_min
                 if rng == 0:
+                    # Constant column: set rng to 1.0 to avoid division by zero.
+                    # Since res_df[col] - col_min is 0.0, the scaled result is 0.0,
+                    # and rescaling yields target_min.
                     rng = 1.0
                 
                 # Apply MinMax Formula
@@ -172,7 +175,9 @@ class TabularScaler:
                     target_rng = 1.0
                     
                 unscaled_val = (res_df[col] - target_min) / target_rng
-                # Reconstruct original values
+                # Reconstruct original values.
+                # If the column was constant, rng is 0.0, so:
+                # unscaled_val * 0 + col_min = col_min (mathematically sound).
                 res_df[col] = unscaled_val * rng + col_min
                 
             elif self.strategy == "standard":

@@ -583,6 +583,7 @@ class TabularCTGAN:
                 "gumbel_temperature": self.gumbel_temperature,
                 "lambda_gp": self.lambda_gp,
                 "n_critic": self.n_critic,
+                "constraint_penalty_weight": self.constraint_penalty_weight,
                 "categories": {
                     col: cats
                     for col, cats in zip(
@@ -606,6 +607,7 @@ class TabularCTGAN:
             gumbel_temperature=checkpoint["gumbel_temperature"],
             lambda_gp=checkpoint["lambda_gp"],
             n_critic=checkpoint["n_critic"],
+            constraint_penalty_weight=checkpoint.get("constraint_penalty_weight", 1.0),
             device=device,
         )
         instance.generator.load_state_dict(checkpoint["generator_state"])

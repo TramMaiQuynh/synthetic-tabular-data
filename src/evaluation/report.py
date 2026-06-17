@@ -131,7 +131,7 @@ class ComplianceReporter:
             "",
             f"- **Distance to Closest Record (DCR) Mean:** {privacy.get('dcr_mean', 0.0):.4f} (Normalized L2)",
             f"- **Distance to Closest Record (DCR) Min:** {privacy.get('dcr_min', 0.0):.4f}",
-            f"- **DCR Leakage Percentage (<0.01):** {dcr_leakage:.2f}% (Synthetic rows matching real training samples)",
+            f"- **DCR Leakage Percentage (<{privacy.get('dcr_leakage_threshold', 0.01):.4f}):** {dcr_leakage:.2f}% (Synthetic rows matching real training samples)",
             f"- **Nearest Neighbor Distance Ratio (NNDR) Mean:** {privacy.get('nndr_mean', 0.0):.4f}",
             f"- **Membership Inference Attack (MIA) AUC:** {mia_auc:.4f} (Attacker prediction capability)",
             "",
@@ -229,6 +229,7 @@ class ComplianceReporter:
         
         # Calculate summary metrics
         dcr_leakage = privacy.get("dcr_leakage_pct", 0.0)
+        dcr_threshold = privacy.get("dcr_leakage_threshold", 0.01)
         avg_js = np.mean(list(fidelity.get("js_divergence", {}).values())) if fidelity.get("js_divergence") else 0.0
         avg_corr_diff = fidelity.get("correlation_difference", 0.0)
         mia_auc = privacy.get("mia_auc", 0.5)
@@ -494,7 +495,7 @@ class ComplianceReporter:
                 <div class="card">
                     <h4>DCR Leakage Percentage</h4>
                     <div class="value">{dcr_leakage:.2f}%</div>
-                    <p style="font-size: 12px; margin: 5px 0 0 0; color:#666;">Share of rows with L2 distance < 0.01</p>
+                    <p style="font-size: 12px; margin: 5px 0 0 0; color:#666;">Share of rows with L2 distance &lt; {dcr_threshold:.4f}</p>
                 </div>
                 <div class="card">
                     <h4>DCR Mean Distance</h4>

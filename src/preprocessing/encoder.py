@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 VALID_HANDLE_UNKNOWN = {"ignore", "error"}
 
 class TabularEncoder:
-    def __init__(self, max_onehot_cardinality: int = 10, handle_unknown: str = "ignore"):
+    def __init__(self, max_onehot_cardinality: int = 10, handle_unknown: str = "ignore", scale_labels: bool = False):
         """
         Initialize the TabularEncoder.
         
@@ -28,6 +28,7 @@ class TabularEncoder:
             max_onehot_cardinality: Maximum number of categories to apply One-Hot Encoding.
                                     Above this, Label Encoding is used.
             handle_unknown: Strategy for handling unseen categories ('ignore' or 'error').
+            scale_labels: Whether to scale label-encoded column values to [0, 1].
         
         Raises:
             ValueError: If handle_unknown is not one of the supported values.
@@ -39,6 +40,7 @@ class TabularEncoder:
             )
         self.max_onehot_cardinality = max_onehot_cardinality
         self.handle_unknown = handle_unknown
+        self.scale_labels = scale_labels
         
         # Fitted states
         self.categorical_cols_: List[str] = []
@@ -160,7 +162,15 @@ class TabularEncoder:
                             raise ValueError(f"Unseen category '{val_str}' found in column '{_col}'")
                         return _unknown_idx
                         
-                res_df[col] = res_df[col].map(map_val).astype(np.float32)
+                mapped = res_df[col].map(map_val).astype(np.float32)
+                if self.scale_labels:
+                    max_idx = len(label_map) - 1
+                    if max_idx > 0:
+                        res_df[col] = mapped / max_idx
+                    else:
+                        res_df[col] = mapped
+                else:
+                    res_df[col] = mapped
                 
         return res_df
 
@@ -201,7 +211,7 @@ class TabularEncoder:
                 # Handle unseen categories where all one-hot columns are 0
                 max_vals = oh_data.max(axis=1)
                 decoded = argmax_cols.map(val_mapping)
-                decoded = decoded.where(max_vals >= 0.5, None)
+                decoded = decoded.where(max_vals >= 1e-5, None)
                 
                 # Map back to category values
                 res_df[col] = decoded
@@ -216,8 +226,13 @@ class TabularEncoder:
                 inverse_map = self.inverse_label_maps_[col]
                 max_idx = len(inverse_map) - 1
                 
-                # Round continuous inputs and clip to valid index ranges
-                indices = np.clip(np.round(res_df[col].values), 0, max_idx).astype(int)
+                if self.scale_labels:
+                    # Scale back from [0, 1] to [0, max_idx], round and clip to valid index ranges
+                    scaled_vals = res_df[col].values * max_idx
+                else:
+                    scaled_vals = res_df[col].values
+                    
+                indices = np.clip(np.round(scaled_vals), 0, max_idx).astype(int)
                 
                 # Map back
                 res_df[col] = [inverse_map[idx] for idx in indices]

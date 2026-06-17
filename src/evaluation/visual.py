@@ -171,7 +171,7 @@ class VisualOverlayGenerator:
         logger.info("Saved correlation difference matrix to %s", corr_path)
         return corr_path
 
-    def plot_dcr_distribution(self, dcr_vals: np.ndarray) -> str:
+    def plot_dcr_distribution(self, dcr_vals: np.ndarray, leakage_threshold: float = 0.01) -> str:
         """
         Plot the histogram & KDE curve of Distance to Closest Record (DCR) values.
         
@@ -184,8 +184,8 @@ class VisualOverlayGenerator:
         try:
             sns.histplot(dcr_vals, kde=True, color="purple", stat="density", alpha=0.5, linewidth=0)
             
-            # Draw threshold marker for warning of leakage (DCR < 0.01)
-            plt.axvline(x=0.01, color="red", linestyle="--", alpha=0.8, label="Leakage Threshold (0.01)")
+            # Draw threshold marker for warning of leakage (DCR < leakage_threshold)
+            plt.axvline(x=leakage_threshold, color="red", linestyle="--", alpha=0.8, label=f"Leakage Threshold ({leakage_threshold:.4f})")
             
             plt.title("Distribution of Distance to Closest Record (DCR)")
             plt.xlabel("L2 Distance in Normalized Space")

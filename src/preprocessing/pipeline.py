@@ -178,7 +178,8 @@ class PreprocessingPipeline:
         self.imputer = TabularImputer(numeric_strategy="median", categorical_strategy="mode")
         self.encoder = TabularEncoder(
             max_onehot_cardinality=self.config.ingestion.max_onehot_cardinality,
-            handle_unknown="ignore"
+            handle_unknown="ignore",
+            scale_labels=True
         )
         self.scaler = TabularScaler(strategy="minmax")
 
@@ -275,12 +276,17 @@ class PreprocessingPipeline:
 
         return res_df
 
-    def save_artifacts(self) -> None:
+    def save_artifacts(self, path: Optional[str] = None) -> None:
         """Save fitted states of Imputer, Encoder, and Scaler to artifacts directory."""
         if not self.is_fitted_:
             raise ValueError("Pipeline is not fitted. Cannot save artifacts.")
             
-        os.makedirs(self.artifacts_dir, exist_ok=True)
+        if path is not None:
+            state_path = os.path.abspath(path)
+        else:
+            state_path = os.path.join(self.artifacts_dir, "preprocessing_pipeline.joblib")
+            
+        os.makedirs(os.path.dirname(state_path), exist_ok=True)
         
         pipeline_state = {
             "imputer": self.imputer,
@@ -293,7 +299,6 @@ class PreprocessingPipeline:
             "original_dtypes": self._original_dtypes,
         }
         
-        state_path = os.path.join(self.artifacts_dir, "preprocessing_pipeline.joblib")
         joblib.dump(pipeline_state, state_path)
         
         # Generate SHA256 checksum for integrity verification
@@ -307,9 +312,13 @@ class PreprocessingPipeline:
             
         logger.info("Preprocessing artifacts saved to %s (checksum: %s)", state_path, checksum_path)
 
-    def load_artifacts(self) -> None:
+    def load_artifacts(self, path: Optional[str] = None) -> None:
         """Load fitted states of Imputer, Encoder, and Scaler from artifacts directory."""
-        state_path = os.path.join(self.artifacts_dir, "preprocessing_pipeline.joblib")
+        if path is not None:
+            state_path = os.path.abspath(path)
+        else:
+            state_path = os.path.join(self.artifacts_dir, "preprocessing_pipeline.joblib")
+            
         if not os.path.exists(state_path):
             raise FileNotFoundError(f"No fitted pipeline artifact found at {state_path}")
         
