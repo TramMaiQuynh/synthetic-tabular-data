@@ -419,20 +419,26 @@ class TabularDiffusion:
             # Start from pure noise
             x_t = torch.randn(b, self.data_dim, device=self.device)
 
-            # Iterative reverse denoising T -> 0
+            # Iterative reverse denoising T -> 0 with clip_denoised to stabilize trajectory
             for t_val in reversed(range(self.T)):
                 t = torch.full((b,), t_val, device=self.device, dtype=torch.long)
                 eps_pred = self.denoiser(x_t, t, cond)
 
-                # DDPM reverse step (Ho et al. 2020, Eq. 11)
                 beta_t = self._betas[t_val]
                 alpha_t = self._alphas[t_val]
                 alpha_bar_t = self._alphas_cumprod[t_val]
-                sqrt_recip_alpha = (1.0 / alpha_t.sqrt())
+                alpha_bar_prev = self._alphas_cumprod_prev[t_val]
 
-                # Predicted posterior mean μ_θ(x_t, t)
-                coeff = beta_t / (1.0 - alpha_bar_t).sqrt()
-                predicted_mean = sqrt_recip_alpha * (x_t - coeff * eps_pred)
+                # Reconstruct clean x_0 and clamp to training range [0, 1] to avoid out-of-distribution drift
+                sqrt_recip_alpha_bar = 1.0 / alpha_bar_t.sqrt()
+                sqrt_one_minus_alpha_bar = (1.0 - alpha_bar_t).sqrt()
+                x0_approx = sqrt_recip_alpha_bar * x_t - (sqrt_recip_alpha_bar * sqrt_one_minus_alpha_bar) * eps_pred
+                x0_approx = x0_approx.clamp(0.0, 1.0)
+
+                # Compute posterior mean using the clamped x0_approx estimate
+                coeff1 = (beta_t * alpha_bar_prev.sqrt()) / (1.0 - alpha_bar_t)
+                coeff2 = (alpha_t.sqrt() * (1.0 - alpha_bar_prev)) / (1.0 - alpha_bar_t)
+                predicted_mean = coeff1 * x0_approx + coeff2 * x_t
 
                 if t_val > 0:
                     posterior_var = self._posterior_variance[t_val]
@@ -441,7 +447,28 @@ class TabularDiffusion:
                 else:
                     x_t = predicted_mean
 
-            outputs.append(x_t.cpu())
+            # Apply type-aware output activations on the GPU
+            activated: List[torch.Tensor] = []
+            offset = 0
+            for meta in self.col_meta:
+                chunk = x_t[:, offset : offset + meta.dim]
+                if meta.col_type == "onehot":
+                    # Softmax categorical distribution (matches CTGAN/CTVAE output activations)
+                    activated.append(torch.softmax(chunk, dim=-1))
+                elif meta.col_type == "label":
+                    # Bounded label range, clamp strictly to [0, 1] (avoid non-linear compression)
+                    activated.append(chunk.clamp(0.0, 1.0))
+                else:  # continuous
+                    if meta.name.endswith("_is_missing"):
+                        # Binarize binary indicator by thresholding directly at 0.5
+                        activated.append((chunk > 0.5).float())
+                    else:
+                        # Continuous feature normalization bounding
+                        activated.append(chunk.clamp(0.0, 1.0))
+                offset += meta.dim
+
+            x_t_activated = torch.cat(activated, dim=1)
+            outputs.append(x_t_activated.cpu())
             remaining -= b
 
         self.denoiser.train()
