@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import logging
 import os
+import random
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -37,12 +38,32 @@ from src.models.diffusion import TabularDiffusion
 from src.models.constraints import ConstraintsEngine
 from src.training.dp_training import DPTrainer
 
-__all__ = ["ModelTrainer", "build_col_meta"]
+__all__ = ["ModelTrainer", "build_col_meta", "set_global_seed"]
 
 logger = logging.getLogger(__name__)
 
 # Supported model type identifiers
 SUPPORTED_MODELS = {"ctgan", "ctvae", "diffusion"}
+
+
+def set_global_seed(seed: int) -> None:
+    """Set random seed for Python, NumPy, and PyTorch for full reproducibility.
+    
+    This is a mandatory prerequisite for scientifically valid model comparisons.
+    Call this BEFORE any data splitting, model instantiation, or training.
+    
+    Args:
+        seed: Integer seed value (e.g. 42).
+    """
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+        # Sacrifice a small amount of speed for full determinism on GPU
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+    logger.info("Global random seed set to %d (Python / NumPy / PyTorch).", seed)
 
 
 # ---------------------------------------------------------------------------
@@ -211,6 +232,8 @@ class ModelTrainer:
         lr: float = 2e-4,
         weight_decay: float = 1e-6,
         max_onehot_cardinality: int = 10,
+        # Reproducibility
+        seed: int = 42,
         # DP-SGD config
         enable_dp: bool = False,
         target_epsilon: float = 1.0,
@@ -256,6 +279,9 @@ class ModelTrainer:
                 'checkpoint_path': path to saved model checkpoint.
         """
         model_kwargs = model_kwargs or {}
+
+        # 0. Set global seed for full reproducibility
+        set_global_seed(seed)
 
         # 1. Build ColumnMeta + tensor
         logger.info("Building ColumnMeta from preprocessed DataFrame (shape=%s).", preprocessed_df.shape)
