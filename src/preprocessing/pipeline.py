@@ -82,8 +82,18 @@ class PreprocessingPipeline:
         elif ext in ['.xls', '.xlsx']:
             sample_df = pd.read_excel(file_path, nrows=1000)
         else:  # default to CSV
-            sep = self.config.ingestion.separator
-            sample_df = pd.read_csv(file_path, sep=sep, nrows=1000)
+            # Respect ingestion configuration parameters
+            read_kwargs = {"nrows": 1000}
+            if hasattr(self.config, "ingestion"):
+                read_kwargs["sep"] = getattr(self.config.ingestion, "separator", ",")
+                if hasattr(self.config.ingestion, "has_header") and not self.config.ingestion.has_header:
+                    read_kwargs["header"] = None
+                    if hasattr(self.config.ingestion, "columns") and self.config.ingestion.columns:
+                        read_kwargs["names"] = self.config.ingestion.columns
+                if hasattr(self.config.ingestion, "na_values") and self.config.ingestion.na_values:
+                    read_kwargs["na_values"] = self.config.ingestion.na_values
+            
+            sample_df = pd.read_csv(file_path, **read_kwargs)
             
         if sample_df.empty:
             return 10000 # fallback default
@@ -120,6 +130,18 @@ class PreprocessingPipeline:
         # Otherwise, we warn or return the first chunk or processed chunks combined.
         _, ext = os.path.splitext(file_path.lower())
         
+        # Prepare read options for CSV/Text files
+        read_kwargs = {}
+        if ext not in ['.parquet', '.xls', '.xlsx']:
+            if hasattr(self.config, "ingestion"):
+                read_kwargs["sep"] = getattr(self.config.ingestion, "separator", ",")
+                if hasattr(self.config.ingestion, "has_header") and not self.config.ingestion.has_header:
+                    read_kwargs["header"] = None
+                    if hasattr(self.config.ingestion, "columns") and self.config.ingestion.columns:
+                        read_kwargs["names"] = self.config.ingestion.columns
+                if hasattr(self.config.ingestion, "na_values") and self.config.ingestion.na_values:
+                    read_kwargs["na_values"] = self.config.ingestion.na_values
+        
         if file_size_bytes > 0.2 * max_ram_bytes:
             logger.info("File size is large (%.1f MB). Reading in chunks of %d rows.", file_size_bytes / 1e6, chunk_rows)
             chunks = []
@@ -133,8 +155,8 @@ class PreprocessingPipeline:
                 # Excel is inherently memory intensive and hard to chunk, read directly
                 return pd.read_excel(file_path)
             else:
-                sep = self.config.ingestion.separator
-                for chunk in pd.read_csv(file_path, sep=sep, chunksize=chunk_rows):
+                read_kwargs["chunksize"] = chunk_rows
+                for chunk in pd.read_csv(file_path, **read_kwargs):
                     chunks.append(chunk)
             return pd.concat(chunks, ignore_index=True)
         else:
@@ -143,8 +165,7 @@ class PreprocessingPipeline:
             elif ext in ['.xls', '.xlsx']:
                 return pd.read_excel(file_path)
             else:
-                sep = self.config.ingestion.separator
-                return pd.read_csv(file_path, sep=sep)
+                return pd.read_csv(file_path, **read_kwargs)
 
     def fit_transform(self, df: pd.DataFrame) -> pd.DataFrame:
         """
