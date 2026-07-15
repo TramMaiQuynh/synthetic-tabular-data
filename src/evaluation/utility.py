@@ -81,6 +81,19 @@ class UtilityEvaluator:
         # Double check alignment with test set
         X_synth, X_real_test = X_synth.align(X_real_test, join="inner", axis=1)
         X_real_train, X_real_test = X_real_train.align(X_real_test, join="inner", axis=1)
+
+        # Scale features using StandardScaler to ensure optimizer convergence (especially Logistic Regression)
+        from sklearn.preprocessing import StandardScaler
+        scaler = StandardScaler()
+        X_real_train = pd.DataFrame(
+            scaler.fit_transform(X_real_train), columns=X_real_train.columns, index=X_real_train.index
+        )
+        X_real_test = pd.DataFrame(
+            scaler.transform(X_real_test), columns=X_real_test.columns, index=X_real_test.index
+        )
+        X_synth = pd.DataFrame(
+            scaler.transform(X_synth), columns=X_synth.columns, index=X_synth.index
+        )
         
         # 3. Define models based on task
         if is_classification:
