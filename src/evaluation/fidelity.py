@@ -52,8 +52,8 @@ def compute_js_divergence(real_series: pd.Series, synth_series: pd.Series) -> fl
     
     Returns the squared JS distance (JS divergence), which lies in [0, 1].
     """
-    r_counts = real_series.dropna().value_counts()
-    s_counts = synth_series.dropna().value_counts()
+    r_counts = real_series.dropna().astype(str).value_counts()
+    s_counts = synth_series.dropna().astype(str).value_counts()
     
     # Get union of all unique categories
     union_cats = list(set(r_counts.index) | set(s_counts.index))
