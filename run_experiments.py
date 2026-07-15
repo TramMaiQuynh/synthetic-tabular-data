@@ -107,7 +107,9 @@ EXPERIMENTS: List[Experiment] = [
     # Group C: Generalization Check (best model on a different dataset)
     # Validates that the best model is not over-fit to one domain
     # -----------------------------------------------------------------------
-    Experiment("C", "C1-Adult", "adult_income", "ctvae", EPOCHS_MAIN, False, None),
+    Experiment("C", "C1-Adult-CTVAE", "adult_income", "ctvae", EPOCHS_MAIN, False, None),
+    Experiment("C", "C2-Adult-CTGAN", "adult_income", "ctgan", EPOCHS_MAIN, False, None),
+    Experiment("C", "C3-Adult-Diffusion", "adult_income", "diffusion", EPOCHS_MAIN, False, None),
 ]
 
 
