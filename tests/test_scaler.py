@@ -41,3 +41,23 @@ def test_scaler_standard():
     # Inverse transform
     restored_df = scaler.inverse_transform(res_df)
     pd.testing.assert_frame_equal(restored_df, df)
+
+def test_scaler_log1p():
+    df = pd.DataFrame({
+        "income": [0.0, 9.0, 99.0]
+    })
+    
+    scaler = TabularScaler(strategy="log1p", feature_range=(0.0, 1.0))
+    res_df = scaler.fit_transform(df, ["income"])
+    
+    # Assert scaled to [0, 1]
+    assert res_df["income"].min() == 0.0
+    assert res_df["income"].max() == 1.0
+    
+    # log1p(0) = 0, log1p(9) = log(10), log1p(99) = log(100)
+    # log(10) / log(100) = 0.5
+    assert np.isclose(res_df.loc[1, "income"], 0.5)
+    
+    # Inverse transform
+    restored_df = scaler.inverse_transform(res_df)
+    pd.testing.assert_frame_equal(restored_df, df)
