@@ -7,7 +7,9 @@ and runs the entire pipeline using those parameters.
 
 import os
 import argparse
+import numpy as np
 import pandas as pd
+from sklearn.model_selection import train_test_split
 from src.config.config_loader import ConfigLoader
 from src.preprocessing.pipeline import PreprocessingPipeline
 from src.training.trainer import ModelTrainer, set_global_seed
@@ -123,10 +125,43 @@ def main():
     pipeline = PreprocessingPipeline(dataset_name)
     df_raw = pipeline.load_data(data_path)
     print(f"    Loaded raw shape: {df_raw.shape}")
-    
-    df_preprocessed = pipeline.fit_transform(df_raw)
+
+    # --- TRAIN / TEST SPLIT ---
+    # The split MUST happen here — before fit_transform and before training —
+    # so that the generative model never sees the hold-out test set.
+    # This is required for valid MIA, DCR Leakage, AIA, and TSTR evaluations.
+    pii_cols_present = [c for c in pipeline.pii_columns if c in df_raw.columns]
+    df_no_pii = df_raw.drop(columns=pii_cols_present)
+
+    # Attempt stratified split when the target column is categorical
+    target_col_name = config.ingestion.target_column
+    stratify_series = None
+    if target_col_name and target_col_name in df_no_pii.columns:
+        col = df_no_pii[target_col_name]
+        is_categorical_target = (
+            pd.api.types.is_object_dtype(col)
+            or isinstance(col.dtype, pd.CategoricalDtype)
+            or col.nunique() <= 20
+        )
+        if is_categorical_target and col.value_counts().min() >= 2:
+            stratify_series = col
+
+    df_train, df_test = train_test_split(
+        df_no_pii,
+        test_size=0.2,
+        random_state=args.seed,
+        stratify=stratify_series,
+    )
+    df_train = df_train.reset_index(drop=True)
+    df_test  = df_test.reset_index(drop=True)
+    split_type = "stratified" if stratify_series is not None else "random"
+    print(f"    Train/Test split ({split_type}): Real Train={df_train.shape[0]} rows, Real Test={df_test.shape[0]} rows")
+    # --------------------------
+
+    # Preprocessor is fit ONLY on Real Train — parameters must not leak from test set
+    df_preprocessed = pipeline.fit_transform(df_train, model_type=model_type)
     print(f"    Preprocessed shape: {df_preprocessed.shape}")
-    
+
     pipeline.save_artifacts()
     
     # 2. Training
@@ -173,15 +208,33 @@ def main():
     # 4. Evaluation Suite
     print("\n[4] Running Evaluation Suite & Generating Reports...")
     suite = EvaluationSuite(dataset_name=dataset_name, artifacts_root=artifacts_root)
-    
+
     target_col = config.ingestion.target_column
     sensitive_col = config.ingestion.quasi_identifiers[0] if config.ingestion.quasi_identifiers else ""
-    
+
+    # Wrap the already-fitted Stage-2 pipeline as the numeric loader for
+    # privacy metrics (DCR, NNDR, MIA, AIA).
+    # CRITICAL: using the train-fitted pipeline ensures that scaler parameters
+    # (min/max) are estimated exclusively from Real Train, not from the full
+    # dataset.  If we let the orchestrator create its own helper pipeline
+    # (the fallback when pipeline_loader_fn is None), it would refit on
+    # real_df (100%), leaking test-set distribution into normalization bounds
+    # and invalidating DCR and MIA results.
+    def _pipeline_loader(df: pd.DataFrame) -> np.ndarray:
+        processed = pipeline.transform(df)
+        return processed.values.astype("float32")
+
+    # Pass pre-split real_train_df and real_test_df explicitly so that the
+    # orchestrator fallback split (which is invalid when the generator was
+    # trained on 100% of data) is never triggered.
     results = suite.run_evaluation(
         real_df=df_raw,
         synth_df=df_synthetic,
+        real_train_df=df_train,
+        real_test_df=df_test,
         target_col=target_col,
-        sensitive_col=sensitive_col
+        sensitive_col=sensitive_col,
+        pipeline_loader_fn=_pipeline_loader,
     )
     
     print("\n" + "=" * 80)
