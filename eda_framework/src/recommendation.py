@@ -156,7 +156,6 @@ class PreprocessingRecommender:
 
         pipeline_config = {
             "dataset_name": dataset_name,
-            "columns_to_drop": list(recomm_drops),
             "imputation_strategy": impute_strategy,
             "encoding_strategy": encoding_strategy,
             "scaling_strategy": scaling_strategy
@@ -176,15 +175,25 @@ class PreprocessingRecommender:
         }
 
     def _deploy_configs(self, dataset_name: str, data_schema: Dict[str, Any], pipeline_config: Dict[str, Any]) -> None:
-        """Deploys configurations to both core config dir and eda_framework outputs dir."""
-        # Define paths
-        project_config_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "config", dataset_name))
+        """Deploys configurations to eda_framework outputs dir only.
+        
+        EDA framework is a RECOMMENDATION ENGINE. It writes draft configurations
+        to eda_framework/outputs/<dataset>/ for user review. The user then reviews
+        and manually copies approved configs to config/<dataset>/ (the single 
+        source of truth). NEVER overwrite config/<dataset>/ files directly, as 
+        they may contain user edits that would be lost.
+        """
         eda_output_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "outputs", dataset_name))
+        os.makedirs(eda_output_dir, exist_ok=True)
 
-        # Save Schema
-        save_yaml(data_schema, os.path.join(project_config_dir, "data_schema.yaml"))
+        # Save Schema (PII columns are ONLY in data_schema.yaml — single source of truth)
         save_yaml(data_schema, os.path.join(eda_output_dir, "data_schema.yaml"))
 
-        # Save Pipeline Config
-        save_yaml(pipeline_config, os.path.join(project_config_dir, "pipeline_config.yaml"))
+        # Save Pipeline Config (no PII columns — they belong in data_schema.yaml only)
         save_yaml(pipeline_config, os.path.join(eda_output_dir, "pipeline_config.yaml"))
+
+        logger.info(
+            "EDA recommendations written to %s. "
+            "Review and manually copy to config/%s/ to apply.",
+            eda_output_dir, dataset_name,
+        )
