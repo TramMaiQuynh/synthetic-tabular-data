@@ -1,0 +1,29 @@
+# Default configurations for EDA Framework
+
+pii:
+  # If unique_count / total_rows >= threshold for object/categorical columns, suggest as PII/Identifier
+  cardinality_threshold: 0.95
+  # Keyword patterns to search in column names (case-insensitive)
+  name_keywords:
+    - id
+    - name
+    - email
+    - phone
+    - address
+    - ssn
+    - passport
+    - license
+    - card
+    - key
+
+profiling:
+  # Threshold to identify rare categories (percentage of occurrences)
+  rare_category_pct_threshold: 5.0
+  # Z-score outlier threshold
+  outlier_zscore_threshold: 3.0
+  # If categorical column cardinality is above this, suggest Label Encoding instead of One-Hot
+  max_onehot_cardinality: 10
+
+missing:
+  # If missing percentage is above this, recommend dropping the column
+  drop_missing_pct_threshold: 50.0

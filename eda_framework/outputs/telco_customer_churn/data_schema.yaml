@@ -1,0 +1,76 @@
+PII_columns_to_drop:
+- customerID
+categorical_features:
+  gender:
+  - Female
+  - Male
+  SeniorCitizen:
+  - '0'
+  - '1'
+  Partner:
+  - 'No'
+  - 'Yes'
+  Dependents:
+  - 'No'
+  - 'Yes'
+  PhoneService:
+  - 'No'
+  - 'Yes'
+  MultipleLines:
+  - 'No'
+  - No phone service
+  - 'Yes'
+  InternetService:
+  - DSL
+  - Fiber optic
+  - 'No'
+  OnlineSecurity:
+  - 'No'
+  - No internet service
+  - 'Yes'
+  OnlineBackup:
+  - 'No'
+  - No internet service
+  - 'Yes'
+  DeviceProtection:
+  - 'No'
+  - No internet service
+  - 'Yes'
+  TechSupport:
+  - 'No'
+  - No internet service
+  - 'Yes'
+  StreamingTV:
+  - 'No'
+  - No internet service
+  - 'Yes'
+  StreamingMovies:
+  - 'No'
+  - No internet service
+  - 'Yes'
+  Contract:
+  - Month-to-month
+  - One year
+  - Two year
+  PaperlessBilling:
+  - 'No'
+  - 'Yes'
+  PaymentMethod:
+  - Bank transfer (automatic)
+  - Credit card (automatic)
+  - Electronic check
+  - Mailed check
+  Churn:
+  - 'No'
+  - 'Yes'
+continuous_features:
+  tenure:
+    min: 0.0
+    max: 72.0
+  MonthlyCharges:
+    min: 18.25
+    max: 118.75
+  TotalCharges:
+    min: 18.8
+    max: 8684.8
+target_column: Churn

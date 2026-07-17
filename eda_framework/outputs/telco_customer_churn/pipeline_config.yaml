@@ -1,0 +1,46 @@
+dataset_name: telco_customer_churn
+columns_to_drop:
+- customerID
+imputation_strategy:
+  TotalCharges: mean
+  tenure: median
+  MonthlyCharges: median
+  gender: mode
+  SeniorCitizen: mode
+  Partner: mode
+  Dependents: mode
+  PhoneService: mode
+  MultipleLines: mode
+  InternetService: mode
+  OnlineSecurity: mode
+  OnlineBackup: mode
+  DeviceProtection: mode
+  TechSupport: mode
+  StreamingTV: mode
+  StreamingMovies: mode
+  Contract: mode
+  PaperlessBilling: mode
+  PaymentMethod: mode
+  Churn: mode
+encoding_strategy:
+  gender: onehot
+  SeniorCitizen: onehot
+  Partner: onehot
+  Dependents: onehot
+  PhoneService: onehot
+  MultipleLines: onehot
+  InternetService: onehot
+  OnlineSecurity: onehot
+  OnlineBackup: onehot
+  DeviceProtection: onehot
+  TechSupport: onehot
+  StreamingTV: onehot
+  StreamingMovies: onehot
+  Contract: onehot
+  PaperlessBilling: onehot
+  PaymentMethod: onehot
+  Churn: onehot
+scaling_strategy:
+  tenure: minmax
+  MonthlyCharges: minmax
+  TotalCharges: minmax
