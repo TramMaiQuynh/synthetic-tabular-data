@@ -246,11 +246,19 @@ class TabularEncoder:
                     scaled_vals = res_df[col].values * max_idx
                 else:
                     scaled_vals = res_df[col].values
-                    
+                
+                # Handle NaN values: replace with 0 (Unknown) before rounding to avoid
+                # undefined behavior when converting NaN to int
+                nan_mask = np.isnan(scaled_vals)
+                if nan_mask.any():
+                    scaled_vals = np.where(nan_mask, 0.0, scaled_vals)
                 indices = np.clip(np.round(scaled_vals), 0, max_idx).astype(int)
                 
                 # Map back
-                res_df[col] = [inverse_map[idx] for idx in indices]
+                decoded_vals = [inverse_map[idx] for idx in indices]
+                if nan_mask.any():
+                    decoded_vals = [None if m else v for m, v in zip(nan_mask, decoded_vals)]
+                res_df[col] = decoded_vals
                 
         # Reorder columns to match fit dataframe if original columns order is available
         if hasattr(self, "original_cols_") and self.original_cols_:
