@@ -109,6 +109,7 @@ class VisualOverlayGenerator:
                 fig.delaxes(axes[idx])
                 
             plt.tight_layout()
+            os.makedirs(self.plots_dir, exist_ok=True)
             grid_path = os.path.join(self.plots_dir, "distributions_grid.png")
             plt.savefig(grid_path, dpi=120)
         finally:
@@ -163,6 +164,7 @@ class VisualOverlayGenerator:
                 ax.set_yticklabels(ax.get_yticklabels(), rotation=0, fontsize=9)
                 
             plt.tight_layout()
+            os.makedirs(self.plots_dir, exist_ok=True)
             corr_path = os.path.join(self.plots_dir, "correlation_comparison.png")
             plt.savefig(corr_path, dpi=120)
         finally:
@@ -192,7 +194,7 @@ class VisualOverlayGenerator:
             plt.ylabel("Density")
             plt.legend()
             plt.tight_layout()
-            
+            os.makedirs(self.plots_dir, exist_ok=True)
             dcr_path = os.path.join(self.plots_dir, "dcr_distribution.png")
             plt.savefig(dcr_path, dpi=120)
         finally:
