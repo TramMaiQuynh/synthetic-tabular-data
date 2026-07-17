@@ -325,14 +325,24 @@ class TabularDiffusion:
                 loss = F.mse_loss(noise_pred, noise)
 
                 # Optional guided-sampling constraint penalty
+                # IMPORTANT: Only continuous columns (dim=1 in col_meta) are
+                # passed to the constraint penalty. Onehot columns (dim > 1)
+                # have col_name_index pointing to the *start* of the group;
+                # passing only x0_approx[:, idx] would extract only the first
+                # element, yielding semantically meaningless penalties.
                 if constraints_engine is not None and col_name_index:
                     # Approximate x_0 from current prediction (for penalty signal)
                     sqrt_ab = self._sqrt_alphas_cumprod[t].unsqueeze(-1)
                     sqrt_one_minus_ab = self._sqrt_one_minus_alphas_cumprod[t].unsqueeze(-1)
                     x0_approx = (x_t - sqrt_one_minus_ab * noise_pred) / sqrt_ab.clamp(min=1e-6)
-                    tensor_dict = {col: x0_approx[:, idx] for col, idx in col_name_index.items()}
-                    penalty = constraints_engine.soft_loss_penalty(tensor_dict)
-                    loss = loss + self.constraint_penalty_weight * penalty
+                    tensor_dict = {}
+                    for meta in self.col_meta:
+                        if meta.dim == 1 and meta.name in col_name_index:
+                            idx = col_name_index[meta.name]
+                            tensor_dict[meta.name] = x0_approx[:, idx]
+                    if tensor_dict:
+                        penalty = constraints_engine.soft_loss_penalty(tensor_dict)
+                        loss = loss + self.constraint_penalty_weight * penalty
 
                 optimizer.zero_grad()
                 if dp_trainer is not None:
