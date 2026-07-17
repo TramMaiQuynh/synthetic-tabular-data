@@ -318,10 +318,20 @@ class TabularCTVAE:
                 loss, rl, kl = _elbo_loss(recon, batch, mu, log_var, self.col_meta, self.beta)
 
                 # Soft constraint penalty
+                # Only continuous columns (dim=1 in col_meta) are passed to the
+                # constraint penalty.  Onehot columns (dim > 1) have
+                # col_name_index pointing to the *start* of the group; passing
+                # only recon[:, idx] would extract only the first element,
+                # yielding semantically meaningless penalties.
                 if constraints_engine is not None and col_name_index:
-                    tensor_dict = {col: recon[:, idx] for col, idx in col_name_index.items()}
-                    penalty = constraints_engine.soft_loss_penalty(tensor_dict)
-                    loss = loss + self.constraint_penalty_weight * penalty
+                    tensor_dict = {}
+                    for meta in self.col_meta:
+                        if meta.dim == 1 and meta.name in col_name_index:
+                            idx = col_name_index[meta.name]
+                            tensor_dict[meta.name] = recon[:, idx]
+                    if tensor_dict:
+                        penalty = constraints_engine.soft_loss_penalty(tensor_dict)
+                        loss = loss + self.constraint_penalty_weight * penalty
 
                 optimizer.zero_grad()
                 if dp_trainer is not None:
@@ -384,7 +394,8 @@ class TabularCTVAE:
         if not self._is_trained:
             raise RuntimeError("TabularCTVAE is not trained. Call fit() first.")
 
-        self.encoder.eval()
+        # Only decoder is used during sampling; encoder.eval() is not needed
+        # but calling it is harmless. We keep decoder.eval() for correctness.
         self.decoder.eval()
         outputs: List[torch.Tensor] = []
 
