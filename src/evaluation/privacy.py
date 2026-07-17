@@ -53,8 +53,9 @@ def compute_dcr_nndr(
     d1 = distances[:, 0]
     d2 = distances[:, 1]
     
-    # NNDR = d1 / d2. Handle d2 == 0 by setting NNDR to 1.0 (no leakage indicator)
-    nndr = np.where(d2 > 0.0, d1 / d2, 1.0)
+    # NNDR = d1 / d2. Use np.divide with 'where' to avoid RuntimeWarning when
+    # d2 == 0 (numpy.where evaluates both branches eagerly).
+    nndr = np.divide(d1, d2, out=np.ones_like(d1), where=d2 > 0.0)
     
     return d1, nndr
 
