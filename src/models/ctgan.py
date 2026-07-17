@@ -26,7 +26,6 @@ Public API:
 from __future__ import annotations
 
 import logging
-import math
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
@@ -468,13 +467,20 @@ class TabularCTGAN:
                 g_loss = -self.discriminator(fake_batch, cond).mean()
 
                 # Optional soft constraint penalty
+                # IMPORTANT: Only continuous columns (dim=1 in col_meta) are
+                # passed to the constraint penalty. Onehot columns (dim > 1)
+                # have col_name_index pointing to the *start* of the group;
+                # passing only fake_batch[:, idx] would extract only the first
+                # element, yielding semantically meaningless penalties.
                 if constraints_engine is not None and col_name_index:
-                    tensor_dict = {
-                        col: fake_batch[:, idx]
-                        for col, idx in col_name_index.items()
-                    }
-                    penalty = constraints_engine.soft_loss_penalty(tensor_dict)
-                    g_loss = g_loss + self.constraint_penalty_weight * penalty
+                    tensor_dict = {}
+                    for meta in self.col_meta:
+                        if meta.dim == 1 and meta.name in col_name_index:
+                            idx = col_name_index[meta.name]
+                            tensor_dict[meta.name] = fake_batch[:, idx]
+                    if tensor_dict:
+                        penalty = constraints_engine.soft_loss_penalty(tensor_dict)
+                        g_loss = g_loss + self.constraint_penalty_weight * penalty
 
                 opt_g.zero_grad()
                 g_loss.backward()
