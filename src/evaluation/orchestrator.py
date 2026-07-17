@@ -226,10 +226,13 @@ class EvaluationSuite:
         logger.info("EvaluationSuite run complete. Saved reports to %s", self.eval_dir)
         
         # Compile summary
+        # Use NaN instead of 0.0 when there are no columns of a given type,
+        # so that downstream consumers (reports, experiment runner) can
+        # distinguish "no data" from "perfect score".
         return {
             "fidelity": {
-                "avg_js": float(np.mean(list(fidelity_results["js_divergence"].values()))) if fidelity_results["js_divergence"] else 0.0,
-                "avg_wasserstein": float(np.mean(list(fidelity_results["wasserstein"].values()))) if fidelity_results["wasserstein"] else 0.0,
+                "avg_js": float(np.mean(list(fidelity_results["js_divergence"].values()))) if fidelity_results["js_divergence"] else float("nan"),
+                "avg_wasserstein": float(np.mean(list(fidelity_results["wasserstein"].values()))) if fidelity_results["wasserstein"] else float("nan"),
                 "correlation_difference": fidelity_results["correlation_difference"],
             },
             "privacy": {
