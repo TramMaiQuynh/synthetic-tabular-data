@@ -1,144 +1,132 @@
 PII_columns_to_drop: []
 categorical_features:
-  education:
-  - Bachelors
-  - HS-grad
-  - 11th
-  - Masters
-  - 9th
-  - Some-college
-  - Assoc-acdm
-  - Assoc-voc
-  - 7th-8th
-  - Doctorate
-  - Prof-school
-  - 5th-6th
-  - 10th
-  - 1st-4th
-  - Preschool
-  - 12th
-  marital-status:
-  - Never-married
-  - Married-civ-spouse
-  - Divorced
-  - Married-spouse-absent
-  - Separated
-  - Married-AF-spouse
-  - Widowed
-  native-country:
-  - United-States
-  - Cuba
-  - Jamaica
-  - India
-  - '?'
-  - Mexico
-  - South
-  - Puerto-Rico
-  - Honduras
-  - England
-  - Canada
-  - Germany
-  - Iran
-  - Philippines
-  - Italy
-  - Poland
-  - Columbia
-  - Cambodia
-  - Thailand
-  - Ecuador
-  - Laos
-  - Taiwan
-  - Haiti
-  - Portugal
-  - Dominican-Republic
-  - El-Salvador
-  - France
-  - Guatemala
-  - China
-  - Japan
-  - Yugoslavia
-  - Peru
-  - Outlying-US(Guam-USVI-etc)
-  - Scotland
-  - Trinadad&Tobago
-  - Greece
-  - Nicaragua
-  - Vietnam
-  - Hong
-  - Ireland
-  - Hungary
-  - Holand-Netherlands
-  occupation:
-  - Adm-clerical
-  - Exec-managerial
-  - Handlers-cleaners
-  - Prof-specialty
-  - Other-service
-  - Sales
-  - Craft-repair
-  - Transport-moving
-  - Farming-fishing
-  - Machine-op-inspct
-  - Tech-support
-  - '?'
-  - Protective-serv
-  - Armed-Forces
-  - Priv-house-serv
-  race:
-  - White
-  - Black
-  - Asian-Pac-Islander
-  - Amer-Indian-Eskimo
-  - Other
-  relationship:
-  - Not-in-family
-  - Husband
-  - Wife
-  - Own-child
-  - Unmarried
-  - Other-relative
-  sex:
-  - Male
-  - Female
   workclass:
-  - State-gov
-  - Self-emp-not-inc
-  - Private
   - Federal-gov
   - Local-gov
-  - '?'
-  - Self-emp-inc
-  - Without-pay
   - Never-worked
+  - Private
+  - Self-emp-inc
+  - Self-emp-not-inc
+  - State-gov
+  - Without-pay
+  education:
+  - 10th
+  - 11th
+  - 12th
+  - 1st-4th
+  - 5th-6th
+  - 7th-8th
+  - 9th
+  - Assoc-acdm
+  - Assoc-voc
+  - Bachelors
+  - Doctorate
+  - HS-grad
+  - Masters
+  - Preschool
+  - Prof-school
+  - Some-college
+  marital-status:
+  - Divorced
+  - Married-AF-spouse
+  - Married-civ-spouse
+  - Married-spouse-absent
+  - Never-married
+  - Separated
+  - Widowed
+  occupation:
+  - Adm-clerical
+  - Armed-Forces
+  - Craft-repair
+  - Exec-managerial
+  - Farming-fishing
+  - Handlers-cleaners
+  - Machine-op-inspct
+  - Other-service
+  - Priv-house-serv
+  - Prof-specialty
+  - Protective-serv
+  - Sales
+  - Tech-support
+  - Transport-moving
+  relationship:
+  - Husband
+  - Not-in-family
+  - Other-relative
+  - Own-child
+  - Unmarried
+  - Wife
+  race:
+  - Amer-Indian-Eskimo
+  - Asian-Pac-Islander
+  - Black
+  - Other
+  - White
+  sex:
+  - Female
+  - Male
+  native-country:
+  - Cambodia
+  - Canada
+  - China
+  - Columbia
+  - Cuba
+  - Dominican-Republic
+  - Ecuador
+  - El-Salvador
+  - England
+  - France
+  - Germany
+  - Greece
+  - Guatemala
+  - Haiti
+  - Holand-Netherlands
+  - Honduras
+  - Hong
+  - Hungary
+  - India
+  - Iran
+  - Ireland
+  - Italy
+  - Jamaica
+  - Japan
+  - Laos
+  - Mexico
+  - Nicaragua
+  - Outlying-US(Guam-USVI-etc)
+  - Peru
+  - Philippines
+  - Poland
+  - Portugal
+  - Puerto-Rico
+  - Scotland
+  - South
+  - Taiwan
+  - Thailand
+  - Trinadad&Tobago
+  - United-States
+  - Vietnam
+  - Yugoslavia
+  income:
+  - <=50K
+  - '>50K'
 continuous_features:
   age:
-    max: 90
-    min: 17
-  capital-gain:
-    max: 99999
-    min: 0
-  capital-loss:
-    max: 4356
-    min: 0
-  education-num:
-    max: 16
-    min: 1
+    min: 17.0
+    max: 90.0
   fnlwgt:
-    max: 1484705
-    min: 12285
+    min: 12285.0
+    max: 1484705.0
+  education-num:
+    min: 1.0
+    max: 16.0
+  capital-gain:
+    min: 0.0
+    max: 99999.0
+  capital-loss:
+    min: 0.0
+    max: 4356.0
   hours-per-week:
-    max: 99
-    min: 1
-missing_imputation_fallback:
-  native-country: mode
-  occupation: mode
-  workclass: mode
-quasi_identifiers:
-- age
-- workclass
-- education
-- marital-status
-- race
-- sex
-- native-country
+    min: 1.0
+    max: 99.0
 target_column: income
