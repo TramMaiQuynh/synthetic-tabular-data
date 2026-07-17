@@ -20,7 +20,6 @@ with no hidden state mutations. Instances are safe to serialise with joblib.
 from __future__ import annotations
 
 import logging
-import math
 import re
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
@@ -134,9 +133,19 @@ class _Constraint:
             gap = rhs_t - lhs_t
         elif self.op in ("<=", "<"):
             gap = lhs_t - rhs_t
-        else:
-            # For equality / inequality — use squared difference
+        elif self.op == "==":
+            # Equality: penalize the absolute difference between lhs and rhs.
+            # When lhs == rhs, gap is 0 → no penalty.
             gap = (lhs_t - rhs_t).abs()
+        elif self.op == "!=":
+            # Inequality: penalize when lhs is TOO CLOSE to rhs.
+            # We want |lhs - rhs| >= some margin. Use a hinge-style penalty:
+            # penalty = max(0, margin - |lhs - rhs|)
+            # This encourages lhs to be at least `margin` away from rhs.
+            margin = 1.0  # in normalized space; interpretable across columns
+            gap = margin - (lhs_t - rhs_t).abs()
+        else:
+            raise ValueError(f"Unsupported operator '{self.op}' in constraint '{self.expression}'.")
 
         return F.relu(gap).mean()
 
@@ -402,6 +411,20 @@ class ConstraintsEngine:
                         corrected_df.loc[row_mask, lhs_col] = (
                             lhs_vals[row_mask].combine(rhs_vals[row_mask], min)
                         )
+                    elif constraint.op == "==":
+                        # Equality: set LHS equal to RHS
+                        corrected_df.loc[row_mask, lhs_col] = rhs_vals[row_mask]
+                    elif constraint.op == "!=":
+                        # Inequality: if LHS == RHS (within tolerance), nudge LHS
+                        # away from RHS by a small epsilon.
+                        # Only modify rows where LHS is actually equal to RHS.
+                        equal_mask = (lhs_vals[row_mask] - rhs_vals[row_mask]).abs() < 1e-6
+                        if equal_mask.any():
+                            eps = 1e-3
+                            equal_idx = row_mask[row_mask].index[equal_mask.values]
+                            corrected_df.loc[equal_idx, lhs_col] = (
+                                rhs_vals.loc[equal_idx] + eps
+                            )
                 else:
                     # Scalar boundary
                     scalar = float(constraint.rhs_scalar)  # type: ignore[arg-type]
@@ -411,6 +434,18 @@ class ConstraintsEngine:
                         corrected_df.loc[row_mask, lhs_col] = lhs_vals[row_mask].clip(lower=scalar)
                     elif constraint.op in ("<=", "<"):
                         corrected_df.loc[row_mask, lhs_col] = lhs_vals[row_mask].clip(upper=scalar)
+                    elif constraint.op == "==":
+                        # Equality with scalar: set LHS equal to scalar
+                        corrected_df.loc[row_mask, lhs_col] = scalar
+                    elif constraint.op == "!=":
+                        # Inequality with scalar: if LHS == scalar (within tolerance),
+                        # perturb LHS away from scalar by a small epsilon.
+                        lhs_vals_rm = lhs_vals[row_mask]
+                        equal_mask = (lhs_vals_rm - scalar).abs() < 1e-6
+                        if equal_mask.any():
+                            eps = 1e-3
+                            equal_idx = row_mask[row_mask].index[equal_mask.values]
+                            corrected_df.loc[equal_idx, lhs_col] = scalar + eps
 
         violation_rate_after = self.violation_rate(corrected_df)
         logger.info("post_correction: violation_rate_after=%.4f.", violation_rate_after)
