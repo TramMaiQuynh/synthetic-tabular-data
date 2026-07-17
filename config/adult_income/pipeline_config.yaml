@@ -1,0 +1,35 @@
+dataset_name: adult_income
+columns_to_drop: []
+imputation_strategy:
+  workclass: mode
+  occupation: mode
+  native-country: mode
+  age: median
+  fnlwgt: median
+  education-num: median
+  capital-gain: median
+  capital-loss: median
+  hours-per-week: median
+  education: mode
+  marital-status: mode
+  relationship: mode
+  race: mode
+  sex: mode
+  income: mode
+encoding_strategy:
+  workclass: onehot
+  education: label
+  marital-status: onehot
+  occupation: label
+  relationship: onehot
+  race: onehot
+  sex: onehot
+  native-country: label
+  income: onehot
+scaling_strategy:
+  age: minmax
+  fnlwgt: minmax
+  education-num: minmax
+  capital-gain: log1p
+  capital-loss: log1p
+  hours-per-week: minmax
