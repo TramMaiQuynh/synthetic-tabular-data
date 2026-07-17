@@ -35,8 +35,10 @@ class PreprocessingPipeline:
         # Load data schema
         self.schema = self._load_schema()
         
-        # Extract features from schema and pipeline config
-        self.pii_columns = list(set(self.schema.get("PII_columns_to_drop", []) + self.pipeline_config.get("columns_to_drop", [])))
+        # Extract PII columns from schema (Single Source of Truth)
+        # pipeline_config.yaml may also contain columns_to_drop for backward compatibility,
+        # but data_schema.yaml is the authoritative source for PII column definitions.
+        self.pii_columns = list(self.schema.get("PII_columns_to_drop", []))
         
         dropped_set = set(self.pii_columns)
         self.categorical_cols = [c for c in self.schema.get("categorical_features", {}).keys() if c not in dropped_set]
