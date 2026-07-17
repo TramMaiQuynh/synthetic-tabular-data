@@ -1,6 +1,4 @@
 dataset_name: telco_customer_churn
-columns_to_drop:
-- customerID
 imputation_strategy:
   TotalCharges: mean
   tenure: median
