@@ -11,7 +11,7 @@ Saves fitted statistics for replication on test data or during inference.
 import logging
 import pandas as pd
 import numpy as np
-from typing import List, Dict, Union
+from typing import List, Dict, Union, Optional
 
 __all__ = ["TabularImputer"]
 
@@ -21,13 +21,14 @@ VALID_NUMERIC_STRATEGIES = {"mean", "median"}
 VALID_CATEGORICAL_STRATEGIES = {"mode", "missing"}
 
 class TabularImputer:
-    def __init__(self, numeric_strategy: str = "median", categorical_strategy: str = "mode"):
+    def __init__(self, numeric_strategy: str = "median", categorical_strategy: str = "mode", column_strategies: Optional[Dict[str, str]] = None):
         """
         Initialize the TabularImputer.
         
         Args:
             numeric_strategy: Strategy for numerical columns ('mean' or 'median').
             categorical_strategy: Strategy for categorical columns ('mode' or 'missing').
+            column_strategies: Optional mapping of column names to specific strategies.
         
         Raises:
             ValueError: If strategy is not one of the supported values.
@@ -44,6 +45,15 @@ class TabularImputer:
             )
         self.numeric_strategy = numeric_strategy
         self.categorical_strategy = categorical_strategy
+        self.column_strategies = column_strategies or {}
+        
+        all_valid = VALID_NUMERIC_STRATEGIES | VALID_CATEGORICAL_STRATEGIES
+        for col, strat in self.column_strategies.items():
+            if strat not in all_valid:
+                raise ValueError(
+                    f"Invalid imputation strategy '{strat}' for column '{col}'. "
+                    f"Must be one of {sorted(all_valid)}"
+                )
         
         # Fitted states
         self.impute_values_: Dict[str, Union[float, str]] = {}
@@ -83,10 +93,17 @@ class TabularImputer:
             if len(non_null_series) == 0:
                 # Fallback if the whole column is NaN
                 val = 0.0
-            elif self.numeric_strategy == "mean":
-                val = float(non_null_series.mean())
             else:
-                val = float(non_null_series.median())
+                col_strat = self.column_strategies.get(col, self.numeric_strategy)
+                if col_strat == "mean":
+                    val = float(non_null_series.mean())
+                elif col_strat == "median":
+                    val = float(non_null_series.median())
+                elif col_strat == "mode":
+                    mode_res = non_null_series.mode()
+                    val = float(mode_res.iloc[0]) if not mode_res.empty else 0.0
+                else:  # missing
+                    val = 0.0
             self.impute_values_[col] = val
             
         # 2. Process categorical columns
@@ -102,12 +119,18 @@ class TabularImputer:
             non_null_series = df[col].dropna()
             if len(non_null_series) == 0:
                 val = "missing"
-            elif self.categorical_strategy == "mode":
-                # Mode might return multiple values; take the first one
-                mode_res = non_null_series.mode()
-                val = str(mode_res.iloc[0]) if not mode_res.empty else "missing"
             else:
-                val = "missing"
+                col_strat = self.column_strategies.get(col, self.categorical_strategy)
+                if col_strat == "mode":
+                    # Mode might return multiple values; take the first one
+                    mode_res = non_null_series.mode()
+                    val = str(mode_res.iloc[0]) if not mode_res.empty else "missing"
+                elif col_strat == "missing":
+                    val = "missing"
+                elif col_strat == "mean":
+                    val = str(non_null_series.mean()) if len(non_null_series) > 0 else "missing"
+                else:
+                    val = str(non_null_series.median()) if len(non_null_series) > 0 else "missing"
             self.impute_values_[col] = val
             
         self.is_fitted_ = True
