@@ -83,7 +83,15 @@ def compute_js_divergence(real_series: pd.Series, synth_series: pd.Series) -> fl
 
 
 def compute_cramers_v(x: pd.Series, y: pd.Series) -> float:
-    """Compute Cramer's V for two categorical columns."""
+    """
+    Compute Cramer's V for two categorical columns.
+    
+    Uses bias-corrected Cramér's V (Bergsma & Wicher, 2013) to obtain an
+    unbiased estimate that is robust to small sample sizes and high-dimensional
+    contingency tables. This correction aligns with the implementation in
+    eda_framework/utils/statistics.py for consistency between EDA and
+    evaluation reports.
+    """
     conf_matrix = pd.crosstab(x, y)
     if conf_matrix.empty:
         return 0.0
@@ -94,9 +102,18 @@ def compute_cramers_v(x: pd.Series, y: pd.Series) -> float:
         
     n = conf_matrix.sum().sum()
     r, k = conf_matrix.shape
-    if n == 0 or min(r - 1, k - 1) == 0:
+    if n <= 1 or min(r - 1, k - 1) == 0:
         return 0.0
-    return float(np.sqrt(chi2 / (n * min(r - 1, k - 1))))
+    
+    phi2 = chi2 / n
+    phi2corr = max(0.0, phi2 - ((k - 1) * (r - 1)) / (n - 1))
+    rcorr = r - ((r - 1) ** 2) / (n - 1)
+    kcorr = k - ((k - 1) ** 2) / (n - 1)
+    divisor = min((kcorr - 1), (rcorr - 1))
+    if divisor <= 0:
+        return 0.0
+        
+    return float(np.sqrt(phi2corr / divisor))
 
 
 def compute_correlation_ratio(categories: pd.Series, measurements: pd.Series) -> float:
