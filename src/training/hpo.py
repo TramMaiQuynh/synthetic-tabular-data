@@ -34,7 +34,6 @@ from __future__ import annotations
 
 import logging
 import math
-import os
 from typing import Any, Dict, List, Optional
 
 import numpy as np
@@ -193,9 +192,11 @@ class HPORunner:
         optuna.logging.set_verbosity(optuna.logging.WARNING)
 
         # Train/val split (stratified by row index — no label leakage)
+        # Use a fixed seed for reproducibility of HPO results
+        rng = np.random.RandomState(42)
         n = len(preprocessed_df)
         val_n = max(1, int(n * self.val_fraction))
-        val_idx = np.random.choice(n, size=val_n, replace=False)
+        val_idx = rng.choice(n, size=val_n, replace=False)
         train_mask = np.ones(n, dtype=bool)
         train_mask[val_idx] = False
 
@@ -364,25 +365,62 @@ class HPORunner:
         col_meta: List[Any],
         reference_columns: List[str],
     ) -> pd.DataFrame:
-        """Convert a generated tensor to a DataFrame with reference column names."""
+        """Convert a generated tensor to a DataFrame with reference column names.
+
+        Correctly reconstructs onehot column groups by matching prefix-based
+        naming conventions while avoiding prefix collisions from columns whose
+        names are strict supersets of a onehot group prefix (e.g. continuous
+        column ``education_num`` could incorrectly match the ``education_``
+        onehot prefix).
+
+        The algorithm is: a reference column ``c`` belongs to the onehot group
+        of ``meta.name`` iff:
+
+        1. ``c`` starts with ``meta.name + '_'``.
+        2. ``c`` does NOT end with ``_is_missing`` (reserved for imputation).
+        3. There is no *other* column in ``col_meta`` whose name is a strict
+           prefix of ``c`` and longer than ``meta.name`` (this prevents
+           ``education_num`` from being assigned to the ``education`` group
+           when ``education_num`` is actually a continuous column, BUT also
+           when ``education_num`` is a separate column with no onehot group).
+        4. ``c`` is not a continuous / label column name that happens to start
+           with the onehot prefix (e.g. when the dataset genuinely contains a
+           column named ``education_num`` next to ``education_HS-grad``).
+        """
         arr = tensor.detach().cpu().numpy()
         cols: List[str] = []
+
+        # Build a set of all non-onehot column names in col_meta so we can
+        # reject reference columns that are actually continuous/label columns
+        # whose names overlap with a onehot prefix.
+        other_names: Dict[str, str] = {}
+        for m in col_meta:
+            if m.col_type != "onehot":
+                other_names[m.name] = m.col_type
+
         for meta in col_meta:
             if meta.col_type == "onehot":
-                # Reconstruct one-hot column names, avoiding prefix collisions
                 onehot_prefix = meta.name + "_"
                 matching = []
                 for c in reference_columns:
-                    if c.startswith(onehot_prefix):
-                        has_longer_match = False
-                        for other in col_meta:
-                            if other.col_type == "onehot" and other.name != meta.name:
-                                other_prefix = other.name + "_"
-                                if c.startswith(other_prefix) and len(other.name) > len(meta.name):
-                                    has_longer_match = True
-                                    break
-                        if not has_longer_match:
-                            matching.append(c)
+                    if not c.startswith(onehot_prefix):
+                        continue
+                    if c.endswith("_is_missing"):
+                        continue
+                    # Reject if c is actually a continuous or label column
+                    # (occurs when a column name like "education_num" starts
+                    # with "education_" but is its own independent column).
+                    if c in other_names:
+                        continue
+                    # Check for longer-match collision with another col_meta
+                    # whose name is a strict prefix of c and longer than ours.
+                    has_longer_match = False
+                    for other in col_meta:
+                        if other.name != meta.name and c.startswith(other.name + "_") and len(other.name) > len(meta.name):
+                            has_longer_match = True
+                            break
+                    if not has_longer_match:
+                        matching.append(c)
                 cols.extend(sorted(matching)[:meta.dim])
             else:
                 cols.append(meta.name)
