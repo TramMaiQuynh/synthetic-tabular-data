@@ -10,7 +10,7 @@ import os
 import logging
 import pandas as pd
 import numpy as np
-from typing import List, Dict, Any, Optional, Callable
+from typing import Dict, Any, Optional, Callable
 
 from src.evaluation.fidelity import FidelityAssessor
 from src.evaluation.privacy import PrivacyAuditor
@@ -102,10 +102,32 @@ class EvaluationSuite:
             
         s_col = sensitive_col or t_col
         
-        # 2. Split real data if not provided (default 80/20 train/test holdout split)
+        # 2. Split real data if not provided.
+        # -----------------------------------------------------------------
+        # IMPORTANT: This fallback split is only valid when EvaluationSuite
+        # is used STANDALONE (i.e. the generative model was trained on the
+        # same 80 % partition that this split produces, by coincidence).
+        #
+        # When called from run_pipeline.py the caller ALWAYS supplies
+        # real_train_df and real_test_df (split before generator training),
+        # so this block should never execute in a correct full-pipeline run.
+        #
+        # If this warning appears in the logs, it means either:
+        #   a) EvaluationSuite is being used directly without a pre-split, OR
+        #   b) run_pipeline.py forgot to pass real_train_df / real_test_df.
+        #
+        # In case (b), MIA results are INVALID: the generator has seen the
+        # entire real_df, so there are no true non-members to compare against.
+        # -----------------------------------------------------------------
         if real_train_df is None or real_test_df is None:
-            logger.info("Splitting real_df into train/test (80/20) for utility/privacy evaluation...")
-            # Use deterministic split to match training holdout
+            logger.warning(
+                "FALLBACK SPLIT TRIGGERED inside EvaluationSuite. "
+                "real_train_df / real_test_df were not supplied by the caller. "
+                "If the generative model was trained on all of real_df, "
+                "MIA and DCR-Leakage results will be UNRELIABLE because the "
+                "test split contains no true non-members. "
+                "Pass real_train_df and real_test_df from run_pipeline.py to suppress this."
+            )
             n = len(real_df)
             train_size = int(n * 0.8)
             real_shuffled = real_df.sample(frac=1.0, random_state=42).reset_index(drop=True)
