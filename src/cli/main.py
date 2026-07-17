@@ -159,7 +159,7 @@ def cmd_train(args: argparse.Namespace) -> int:
     df_raw = pipeline.load_data(data_path)
     logger.info("Raw shape: %s", df_raw.shape)
 
-    df_preprocessed = pipeline.fit_transform(df_raw)
+    df_preprocessed = pipeline.fit_transform(df_raw, model_type=model_type)
     logger.info("Preprocessed shape: %s", df_preprocessed.shape)
 
     pipeline.save_artifacts()
@@ -458,7 +458,7 @@ def cmd_hpo(args: argparse.Namespace) -> int:
     logger.info("Preprocessing data for HPO: %s", data_path)
     pipeline = PreprocessingPipeline(args.dataset)
     df_raw = pipeline.load_data(data_path)
-    df_preprocessed = pipeline.fit_transform(df_raw)
+    df_preprocessed = pipeline.fit_transform(df_raw, model_type=model_type)
     pipeline.save_artifacts()
     logger.info("Preprocessed shape: %s", df_preprocessed.shape)
 
