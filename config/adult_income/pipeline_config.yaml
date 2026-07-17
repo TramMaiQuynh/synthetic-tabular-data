@@ -1,5 +1,4 @@
 dataset_name: adult_income
-columns_to_drop: []
 imputation_strategy:
   workclass: mode
   occupation: mode
