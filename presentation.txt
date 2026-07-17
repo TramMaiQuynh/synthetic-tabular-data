@@ -1,0 +1,387 @@
+NGHIÊN CỨU VÀ XÂY DỰNG HỆ THỐNG GENERATIVE AI SINH DỮ LIỆU BẢNG NHÂN TẠO (SYNTHETIC TABULAR DATA) BẢO TOÀN ĐẶC TÍNH THỐNG KÊ VÀ QUYỀN RIÊNG TƯ
+	PHÁT BIỂU VẤN ĐỀ
+Các Tập đoàn Tài chính, Ngân hàng, Bệnh viện và Viễn thông (gọi chung là doanh nghiệp) sở hữu tài nguyên dữ liệu rất lớn (lịch sử giao dịch, hồ sơ bệnh án). Các doanh nghiệp cần thuê bên thứ ba (outsource AI), hoặc cho phép team Data Science nội bộ dùng data này để huấn luyện các mô hình dự báo rủi ro, cá nhân hóa. Tuy nhiên, điều này bị ngăn cấm bởi pháp luật:
+	Ở Châu Âu có luật GDPR, Mỹ có luật HIPAA, Singapore có luật PDPA, và đặc biệt tại Việt Nam là Nghị định 13/2023/NĐ-CP về Bảo vệ dữ liệu cá nhân
+	Các bộ luật này CẤM TUYỆT ĐỐI việc mang dữ liệu thật của khách hàng ra môi trường ngoài hoặc cho kỹ sư phát triển tiếp xúc trực tiếp.
+Mặt khác, các dữ liệu thường gặp vấn đề bất cân bằng dữ liệu (Imbalanced Data): Các bài toán như Phát hiện gian lận thẻ (Fraud Detection) thường có quá ít mẫu dữ liệu lừa đảo trong thực tế, khiến mô hình AI bị thiên lệch (Bias) và phán đoán sai
+Rào cản này đã dẫn đến các vấn đề sau:
+	Khó khăn trong thuê ngoài (Outsourcing/Partnership): Doanh nghiệp không thể chia sẻ dữ liệu thật cho các đối tác, công ty AI Startup bên ngoài để hợp tác xây dựng các mô hình phân tích.
+	Rào cản nội bộ (Internal Data Silos): Các kỹ sư AI nội bộ không được phép đưa dữ liệu khách hàng lên môi trường thử nghiệm (Dev/Test Cloud) hay laptop cá nhân để nghiên cứu và lập trình hàng ngày do rủi ro rò rỉ.
+	Hạn chế đổi mới mở (Open Innovation): Doanh nghiệp không thể công bố dữ liệu để tổ chức các cuộc thi Hackathon, hợp tác với trường đại học, hay thương mại hóa Data Insight.
+	Hoạch định ý tưởng và định hình bài toán
+	Các giải pháp sẵn có để bảo vệ quyền riêng tư dữ liệu
+Các phương pháp bảo vệ quyền riêng tư truyền thống chủ yếu tập trung vào việc loại bỏ hoặc che giấu các thuộc tính định danh trực tiếp của cá nhân. Mặc dù giúp giảm nguy cơ rò rỉ thông tin, các phương pháp này vẫn tồn tại nhiều hạn chế khi dữ liệu được chia sẻ hoặc sử dụng cho các bài toán phân tích và học máy.
+	Hashing / Pseudonymization (Mã hóa một chiều / Giả danh hóa): Chỉ thay thế các định danh trực tiếp bằng giá trị băm hoặc mã định danh khác, nhưng không loại bỏ hoàn toàn nguy cơ linkage attack và re-identification. Chẳng hạn, nếu cột Email được băm bằng một hàm hash phổ biến và kẻ tấn công sở hữu danh sách email gốc từ một nguồn rò rỉ khác, họ có thể áp dụng cùng hàm băm lên danh sách đó và đối chiếu với tập dữ liệu đã được băm để khôi phục danh tính của các bản ghi (linkage attack). Ngay cả khi các định danh trực tiếp đã bị loại bỏ, các thuộc tính hành vi như thời gian giao dịch, tần suất mua sắm hoặc giá trị thanh toán vẫn có thể tạo thành behavioral fingerprint, cho phép tái định danh cá nhân thông qua việc kết hợp với các nguồn dữ liệu bên ngoài (re-identification).
+	K-Anonymity / L-Diversity (Ẩn danh hóa truyền thống): Đạt được quyền riêng tư bằng cách tổng quát hóa (generalization) hoặc loại bỏ (suppression) các giá trị thuộc tính nhằm khiến mỗi bản ghi không thể phân biệt với ít nhất k − 1 bản ghi khác. Tuy nhiên, quá trình này làm giảm độ chi tiết của dữ liệu (data fidelity), làm biến đổi các mối quan hệ thống kê giữa các thuộc tính và suy giảm giá trị phân tích (data utility). Đối với các bài toán khai phá dữ liệu và học máy, việc mất đi cấu trúc phân phối đa biến (multivariate distribution) có thể làm giảm đáng kể độ chính xác của mô hình.
+	Generative Deep Learning (Sinh dữ liệu tổng hợp bằng học sâu): Thay vì chỉnh sửa trực tiếp dữ liệu gốc, các mô hình sinh dữ liệu như GAN, Variational Autoencoder (VAE) hoặc Diffusion Model học phân phối xác suất của tập dữ liệu gốc để tạo ra các bản ghi hoàn toàn mới. Dữ liệu tổng hợp không phải là bản sao của các mẫu ban đầu mà là các mẫu được sinh từ phân phối đã học, nhờ đó vẫn duy trì được các đặc trưng thống kê và mối tương quan quan trọng của dữ liệu thật, đồng thời giảm nguy cơ tiết lộ thông tin của từng cá nhân. Nhờ khả năng bảo toàn các đặc trưng thống kê của dữ liệu trong khi giảm nguy cơ tiết lộ thông tin cá nhân, Generative Deep Learning được xem là một hướng tiếp cận phù hợp cho bài toán sinh dữ liệu tổng hợp phục vụ chia sẻ dữ liệu và phát triển các mô hình học máy.
+	Định nghĩa dữ liệu tổng hợp đạt chuẩn
+Làm sao để nghiệm thu dự án? Làm sao chứng minh dữ liệu tổng hợp này dùng được và an toàn?
+Một bộ dữ liệu tổng hợp chỉ có giá trị khi đồng thời đáp ứng yêu cầu về khả năng sử dụng và bảo vệ quyền riêng tư. Do đó, việc đánh giá chất lượng dữ liệu tổng hợp không thể chỉ dựa trên cảm quan hoặc một chỉ số đơn lẻ mà cần được thực hiện thông qua một hệ thống tiêu chí định lượng. Trong nghiên cứu này, dữ liệu tổng hợp được xem là đạt yêu cầu khi đáp ứng các tiêu chí sau:
+Về nghiệp vụ (Business Requirement): Dữ liệu tổng hợp phải bảo toàn được độ hữu ích học máy (ML Utility): các đối tác huấn luyện các mô hình AI đạt hiệu năng dự báo tương đương (sai lệch chỉ số F1-Score/AUC không đáng kể) so với dữ liệu gốc.
+Về bảo mật (Privacy Requirement): Dữ liệu tổng hợp không được làm lộ thông tin của các cá nhân trong tập dữ liệu gốc. Cụ thể, dữ liệu sinh ra không được sao chép hoặc quá tương đồng với bất kỳ bản ghi nào trong dữ liệu thật, đồng thời phải có khả năng chống lại các kỹ thuật tái định danh và suy luận thông tin.
+Về kỹ thuật (Statistical Requirement): Dữ liệu tổng hợp cần bảo toàn các đặc trưng thống kê quan trọng của dữ liệu gốc, bao gồm phân phối xác suất của từng thuộc tính và mối tương quan giữa các thuộc tính, nhằm đảm bảo tính nhất quán phục vụ phân tích và huấn luyện mô hình.
+Để đánh giá toàn diện các yêu cầu trên, nghiên cứu sử dụng ba nhóm tiêu chí chính gồm Fidelity, Privacy và Utility.
+	Statistical fidelity (Độ trung thực thống kê): Đánh giá mức độ tương đồng về đặc trưng thống kê giữa dữ liệu tổng hợp và dữ liệu thật. Các chỉ số được sử dụng bao gồm Jensen–Shannon Divergence đối với các biến phân loại, Wasserstein Distance đối với các biến liên tục và Correlation Difference để đánh giá sự khác biệt trong cấu trúc tương quan giữa các thuộc tính.
+Phản ánh mức độ synthetic data tái hiện được các đặc điểm thống kê của dữ liệu gốc. Một mô hình sinh dữ liệu có fidelity cao sẽ tạo ra dữ liệu mới có các tính chất thống kê tương tự dữ liệu thật, mặc dù các bản ghi được sinh ra không phải là bản sao của dữ liệu gốc.
+Độ trung thực thống kê thường được đánh giá trên ba khía cạnh chính:
+	Phân phối biên (Marginal Distribution): Mỗi biến trong dữ liệu tổng hợp cần có phân phối gần với biến tương ứng trong dữ liệu thật. Chẳng hạn, nếu độ tuổi khách hàng trong dữ liệu gốc chủ yếu nằm trong khoảng từ 25 đến 45 tuổi thì dữ liệu tổng hợp cũng nên thể hiện xu hướng phân bố tương tự. Việc bảo toàn phân phối biên giúp các đặc điểm cơ bản của từng thuộc tính không bị sai lệch.
+	Mối quan hệ giữa các biến (Correlation): Ngoài từng biến riêng lẻ, dữ liệu tổng hợp cũng cần duy trì các mối quan hệ thống kê giữa các thuộc tính. Ví dụ, nếu trong dữ liệu thật thu nhập và mức chi tiêu có tương quan dương (khách hàng có thu nhập cao thường chi tiêu nhiều hơn), thì dữ liệu tổng hợp cũng nên phản ánh xu hướng này. Việc bảo toàn tương quan đặc biệt quan trọng đối với các bài toán học máy vì nhiều mô hình dựa vào cấu trúc phụ thuộc giữa các biến để đưa ra dự đoán.
+	Cấu trúc thống kê tổng thể (Global Statistical Structure): Bên cạnh phân phối của từng biến và tương quan từng cặp biến, dữ liệu tổng hợp cần giữ được cấu trúc thống kê chung của toàn bộ tập dữ liệu, bao gồm các mẫu phân bố và sự phụ thuộc giữa nhiều biến. Điều này giúp dữ liệu tổng hợp có thể được sử dụng thay thế dữ liệu thật trong các tác vụ phân tích hoặc huấn luyện mô hình.
+Để đánh giá fidelity, nhiều chỉ số thống kê đã được đề xuất trong các nghiên cứu về dữ liệu tổng hợp, trong đó phổ biến nhất là:
+	Wasserstein Distance (Earth Mover's Distance): Đo khoảng cách giữa hai phân phối xác suất của các biến liên tục. Giá trị càng nhỏ chứng tỏ phân phối của dữ liệu tổng hợp càng gần với dữ liệu thật; giá trị bằng 0 thể hiện hai phân phối trùng khớp hoàn toàn.
+	Jensen–Shannon Divergence (JSD): Được sử dụng để so sánh hai phân phối xác suất, đặc biệt phù hợp với các biến phân loại hoặc các phân phối rời rạc. JSD luôn nằm trong một khoảng hữu hạn, có tính đối xứng và dễ diễn giải hơn so với Kullback–Leibler Divergence (KL Divergence). Giá trị càng nhỏ cho thấy hai phân phối càng giống nhau.
+	So sánh ma trận tương quan (Correlation Matrix Comparison): Ma trận tương quan của dữ liệu tổng hợp được so sánh với ma trận tương quan của dữ liệu gốc bằng các chỉ số như sai số trung bình tuyệt đối (Mean Absolute Error – MAE) hoặc chuẩn Frobenius. Sự khác biệt càng nhỏ chứng tỏ dữ liệu tổng hợp bảo toàn tốt các mối quan hệ giữa các thuộc tính.
+	Privacy (Bảo vệ quyền riêng tư): Đánh giá khả năng chống rò rỉ thông tin thông qua các kịch bản tấn công phổ biến. Nghiên cứu xem xét hai dạng tấn công gồm Membership Inference Attack (MIA), được đo bằng chỉ số AUC-ROC của mô hình tấn công, và kiểm tra mức độ ghi nhớ dữ liệu thông qua Distance to Closest Record (DCR) nhằm phát hiện nguy cơ dữ liệu tổng hợp quá gần với các bản ghi thật.
+Privacy đề cập đến khả năng ngăn chặn việc tiết lộ hoặc suy luận thông tin về các cá nhân xuất hiện trong tập dữ liệu huấn luyện. Mặc dù dữ liệu tổng hợp được tạo ra bởi mô hình sinh dữ liệu và không phải là bản sao trực tiếp của dữ liệu gốc, nguy cơ rò rỉ thông tin vẫn tồn tại nếu mô hình ghi nhớ quá mức (overfitting) hoặc tái tạo lại các mẫu dữ liệu cụ thể từ tập huấn luyện.
+Việc đánh giá quyền riêng tư của dữ liệu tổng hợp thường tập trung vào khả năng chống lại các cuộc tấn công suy luận (inference attacks) và liên kết dữ liệu (linkage attacks). Một số mối đe dọa phổ biến bao gồm:
+	Membership Inference Attack (MIA)
+Trong tấn công suy luận thành viên (Membership Inference Attack – MIA), kẻ tấn công cố gắng xác định liệu một bản ghi cụ thể có xuất hiện trong tập dữ liệu huấn luyện hay không. Nếu việc tham gia của một cá nhân trong tập dữ liệu mang ý nghĩa nhạy cảm (ví dụ: bệnh nhân mắc một bệnh cụ thể hoặc khách hàng của một tổ chức tài chính), thì khả năng xác định sự hiện diện của bản ghi đó đã được xem là một dạng vi phạm quyền riêng tư.
+	Attribute Inference Attack (AIA)
+Tấn công suy luận thuộc tính (Attribute Inference Attack – AIA) xảy ra khi kẻ tấn công sử dụng các thuộc tính đã biết của một cá nhân kết hợp với dữ liệu tổng hợp để suy đoán các thuộc tính nhạy cảm chưa được công bố. Chẳng hạn, nếu biết tuổi, nghề nghiệp và khu vực sinh sống của một cá nhân, kẻ tấn công có thể cố gắng suy ra mức thu nhập hoặc tình trạng sức khỏe của người đó.
+	Record Linkage Attack
+Tấn công liên kết bản ghi (Record Linkage Attack) nhằm ghép nối một bản ghi trong dữ liệu tổng hợp với một cá nhân cụ thể trong dữ liệu thực hoặc trong một nguồn dữ liệu bên ngoài. Nếu một bản ghi tổng hợp quá giống với một bản ghi thật, kẻ tấn công có thể xác định danh tính của cá nhân tương ứng hoặc suy luận thêm các thông tin nhạy cảm liên quan.
+Để đánh giá mức độ bảo vệ quyền riêng tư, nhiều chỉ số định lượng đã được đề xuất trong các nghiên cứu về dữ liệu tổng hợp.
+Distance to Closest Record (DCR)
+Distance to Closest Record (DCR) đo khoảng cách từ mỗi bản ghi tổng hợp đến bản ghi thật gần nhất trong tập dữ liệu gốc. Khoảng cách này có thể được tính bằng nhiều thước đo khác nhau như khoảng cách Euclid hoặc khoảng cách Manhattan.
+Giá trị DCR quá nhỏ cho thấy một số bản ghi tổng hợp rất giống với dữ liệu thật, làm tăng nguy cơ mô hình đã ghi nhớ hoặc tái tạo lại dữ liệu huấn luyện. Ngược lại, DCR lớn hơn thường phản ánh mức độ bảo vệ quyền riêng tư tốt hơn. Tuy nhiên, DCR quá lớn cũng có thể làm giảm tính hữu ích của dữ liệu vì dữ liệu tổng hợp trở nên quá khác biệt so với dữ liệu gốc.
+Membership Inference Attack AUC-ROC
+Một phương pháp đánh giá phổ biến khác là mô phỏng một cuộc tấn công MIA và đo hiệu quả của kẻ tấn công bằng chỉ số Area Under the Receiver Operating Characteristic Curve (AUC-ROC).
+	AUC = 0.5 cho thấy kẻ tấn công không thể phân biệt được bản ghi nào thuộc tập huấn luyện và bản ghi nào không thuộc tập huấn luyện; đây là kết quả lý tưởng về mặt quyền riêng tư.
+	AUC càng lớn hơn 0.5 thì khả năng suy luận càng cao, đồng nghĩa với nguy cơ rò rỉ thông tin tăng lên.
+	Các giá trị AUC rất cao (ví dụ trên 0.8) thường được xem là dấu hiệu của rủi ro quyền riêng tư nghiêm trọng và cho thấy mô hình có thể đã ghi nhớ thông tin từ dữ liệu huấn luyện.
+Nhìn chung, mục tiêu của đánh giá quyền riêng tư là bảo đảm rằng dữ liệu tổng hợp vẫn giữ được giá trị sử dụng cho phân tích hoặc huấn luyện mô hình, đồng thời không cho phép khôi phục, nhận diện hoặc suy luận đáng tin cậy về các cá nhân trong tập dữ liệu gốc.
+	Utility (Tính hữu ích): Đánh giá khả năng sử dụng dữ liệu tổng hợp trong các bài toán học máy bằng giao thức Train Synthetic, Test Real (TSTR). Theo đó, mô hình được huấn luyện trên dữ liệu tổng hợp và đánh giá trên tập dữ liệu thật. Hiệu năng của mô hình được so sánh với kịch bản Train Real, Test Real (TRTR) để xác định mức độ suy giảm chất lượng. Trong phạm vi nghiên cứu này, dữ liệu tổng hợp được xem là đạt yêu cầu khi điểm F1-macro của mô hình TSTR đạt tối thiểu 90% so với mô hình TRTR.
+Utility phản ánh mức độ mà dữ liệu tổng hợp có thể thay thế dữ liệu thật trong các tác vụ phân tích dữ liệu hoặc học máy. Một tập dữ liệu tổng hợp được xem là có utility cao nếu các mô hình được huấn luyện trên dữ liệu này vẫn đạt hiệu quả tương đương khi được áp dụng cho dữ liệu thực.
+Khác với Statistical Fidelity, vốn đánh giá mức độ tương đồng về mặt thống kê, utility tập trung vào khả năng duy trì giá trị sử dụng của dữ liệu trong các ứng dụng thực tế. Một tập dữ liệu có fidelity cao chưa chắc đã có utility cao nếu các đặc trưng quan trọng đối với bài toán học máy không được bảo toàn đầy đủ.
+Phương pháp đánh giá utility phổ biến nhất là Train on Synthetic, Test on Real (TSTR).
+Train on Synthetic, Test on Real (TSTR)
+Trong phương pháp Train on Synthetic, Test on Real (TSTR), một mô hình học máy được huấn luyện hoàn toàn trên dữ liệu tổng hợp, sau đó được đánh giá trên tập kiểm thử gồm dữ liệu thật chưa từng xuất hiện trong quá trình huấn luyện.
+Quy trình đánh giá gồm các bước sau:
+	Sinh dữ liệu tổng hợp từ tập dữ liệu gốc bằng mô hình tạo dữ liệu.
+	Huấn luyện một mô hình học máy (chẳng hạn Random Forest, XGBoost hoặc Neural Network) trên tập dữ liệu tổng hợp.
+	Đánh giá mô hình trên tập dữ liệu kiểm thử được lấy từ dữ liệu thật.
+	Tính các chỉ số đánh giá phù hợp với từng bài toán.
+Nếu mô hình đạt hiệu suất cao trên dữ liệu thật, điều đó cho thấy dữ liệu tổng hợp đã bảo toàn được các đặc trưng quan trọng phục vụ cho việc học và dự đoán.
+Train on Real, Test on Real (TRTR)
+Để có cơ sở so sánh, cùng một mô hình được huấn luyện và đánh giá hoàn toàn trên dữ liệu thật theo quy trình Train on Real, Test on Real (TRTR). Đây được xem là đường cơ sở (baseline), phản ánh hiệu suất tốt nhất có thể đạt được khi sử dụng dữ liệu gốc.
+Mức chênh lệch giữa kết quả của TSTR và TRTR cho biết mức độ suy giảm hiệu năng khi thay thế dữ liệu thật bằng dữ liệu tổng hợp.
+Chỉ số đánh giá
+Các chỉ số đánh giá phụ thuộc vào loại bài toán học máy đang xét.
+	Bài toán phân loại (Classification): Accuracy, Precision, Recall, F1-score hoặc Area Under the ROC Curve (AUC-ROC).
+	Bài toán hồi quy (Regression): Mean Absolute Error (MAE), Root Mean Squared Error (RMSE) và hệ số xác định (R^2).
+Nếu các chỉ số thu được từ TSTR gần với kết quả của TRTR thì có thể kết luận rằng dữ liệu tổng hợp có utility cao và có khả năng thay thế dữ liệu thật trong quá trình huấn luyện mô hình. Ngược lại, sự chênh lệch lớn giữa hai phương pháp cho thấy dữ liệu tổng hợp chưa bảo toàn đầy đủ các đặc trưng cần thiết cho tác vụ học máy.
+Cần lưu ý rằng utility không chỉ phụ thuộc vào chất lượng của dữ liệu tổng hợp mà còn chịu ảnh hưởng bởi mô hình học máy được sử dụng và đặc điểm của từng bài toán. Vì vậy, trong thực tế, các nghiên cứu thường đánh giá utility trên nhiều mô hình và nhiều chỉ số khác nhau nhằm bảo đảm kết quả có tính khái quát và khách quan.
+Đồng thời, hệ thống cũng phải có các tính chất:
+Tính tổng quát (Generalization): Có khả năng xử lý nhiều loại dữ liệu bảng khác nhau, bao gồm dữ liệu số, dữ liệu phân loại, dữ liệu hỗn hợp và dữ liệu có chứa giá trị khuyết.
+Tính tái lập và kiểm soát (Reproducibility and Controllability): Có khả năng tái lập kết quả và cho phép áp đặt hoặc điều chỉnh các ràng buộc nghiệp vụ (ví dụ: TotalCharges ≥ MonthlyCharges).
+	Cơ sở lựa chọn CTGAN, CTVAE và Tabular Diffusion
+	Đặc thù của dữ liệu dạng bảng và thách thức đối với mô hình sinh
+Việc lựa chọn mô hình sinh dữ liệu có ảnh hưởng trực tiếp đến chất lượng của dữ liệu tổng hợp. Mặc dù các kiến trúc sinh dữ liệu như Generative Adversarial Network (GAN) và Variational Autoencoder (VAE) đã đạt nhiều thành công trên dữ liệu ảnh, chúng không được thiết kế để xử lý trực tiếp dữ liệu dạng bảng (tabular data). Điều này xuất phát từ những đặc điểm riêng của dữ liệu dạng bảng so với dữ liệu ảnh.
+Thứ nhất, dữ liệu dạng bảng thường bao gồm nhiều kiểu dữ liệu khác nhau (mixed-type data). Trong cùng một tập dữ liệu có thể đồng thời tồn tại các biến liên tục (continuous), biến phân loại (categorical), biến nhị phân (binary) và đôi khi cả biến thứ bậc (ordinal). Các mô hình GAN hoặc VAE truyền thống thường giả định dữ liệu đầu vào có cùng một kiểu biểu diễn và cùng không gian giá trị, do đó gặp khó khăn trong việc mô hình hóa đồng thời các kiểu dữ liệu khác nhau cũng như duy trì mối quan hệ giữa chúng.
+Thứ hai, các biến phân loại trong dữ liệu thực tế thường có phân phối mất cân bằng. Ví dụ, trong bài toán dự đoán khách hàng rời bỏ dịch vụ (Customer Churn), lớp No có thể chiếm khoảng 80% trong khi lớp Yes chỉ chiếm khoảng 20%. Khi huấn luyện trên dữ liệu mất cân bằng, GAN truyền thống dễ gặp hiện tượng Mode Collapse, trong đó mô hình chỉ sinh ra các mẫu thuộc lớp chiếm ưu thế và bỏ qua hoặc sinh rất ít các mẫu của lớp thiểu số. Điều này làm giảm đáng kể giá trị sử dụng của dữ liệu tổng hợp trong các bài toán học máy.
+Thứ ba, nhiều biến liên tục trong dữ liệu dạng bảng có phân phối đa đỉnh (multi-modal distribution). Chẳng hạn, giá trị giao dịch của khách hàng có thể hình thành nhiều cụm tương ứng với các nhóm hành vi tiêu dùng khác nhau. Các phương pháp chuẩn hóa thông thường như Min–Max Scaling hoặc Standardization không mô hình hóa được cấu trúc đa đỉnh này, khiến mô hình sinh dữ liệu khó tái tạo chính xác phân phối của dữ liệu gốc.
+Theo khảo sát, các mô hình sinh dữ liệu bảng hiện đại có thể được phân loại thành 3 thế hệ:
+	Thế hệ 1 (GAN/VAE): CTGAN, CTVAE, TVAE.
+	Thế hệ 2 (Diffusion): TabDDPM, Forest Diffusion.
+	Thế hệ 3 (Transformer-based): GReaT, TabSyn, STASY.
+Để khắc phục các hạn chế trên, nghiên cứu lựa chọn ba mô hình gồm CTGAN (GAN), CTVAE (VAE), và TabDDPM (Diffusion) – mỗi mô hình đại diện cho một hướng tiếp cận khác nhau trong sinh dữ liệu dạng bảng hiện đại.
+	Mô tả và lý do chọn từng mô hình
+CTGAN (Conditional Tabular GAN) mở rộng kiến trúc GAN bằng cách đưa điều kiện (conditional vector) vào quá trình sinh dữ liệu, cho phép mô hình chủ động học và sinh các giá trị thuộc từng lớp của biến phân loại (giải quyết bài toán mất cân bằng lớp). Đồng thời, CTGAN sử dụng kỹ thuật Mode‑specific Normalization, dựa trên Variational Gaussian Mixture Model (VGM), để biểu diễn các biến liên tục có phân phối đa đỉnh. Nhờ đó, mô hình cải thiện khả năng sinh dữ liệu trên các tập dữ liệu hỗn hợp và mất cân bằng. Nhưng GAN khó huấn luyện
+CTVAE (Conditional Tabular Variational Autoencoder) áp dụng nguyên lý tương tự trong khuôn khổ Variational Autoencoder. Mô hình kết hợp cơ chế điều kiện với phương pháp chuẩn hóa theo từng mode nhằm mô hình hóa đồng thời các biến liên tục và biến phân loại. So với GAN, CTVAE thường có quá trình huấn luyện ổn định hơn do không sử dụng cơ chế huấn luyện đối kháng.
+TabDDPM (Tabular Denoising Diffusion Probabilistic Model) – trong đồ án gọi nội bộ là TabularDiffusion – là hướng tiếp cận mới dựa trên mô hình khuếch tán (Diffusion Model). Thay vì học thông qua quá trình đối kháng như GAN, mô hình được huấn luyện bằng cách học quá trình khử nhiễu (denoising) từng bước để tái tạo phân phối dữ liệu. Cơ chế này giúp giảm nguy cơ Mode Collapse và được nhiều nghiên cứu gần đây (Kotelnikov et al., 2022) ghi nhận có khả năng mô hình hóa các mối quan hệ phi tuyến và các phụ thuộc phức tạp giữa các thuộc tính trong dữ liệu dạng bảng. 
+	Cơ sở loại bỏ các mô hình khác
+	TVAE (Tabular VAE) là biến thể của VAE nhưng ít được sử dụng trong thực tế cho dữ liệu bảng hỗn hợp so với CTVAE. CTVAE đã tích hợp cơ chế điều kiện hóa, xử lý mất cân bằng lớp tốt hơn, do đó CTVAE được chọn làm đại diện tiêu biểu cho nhóm VAE là đủ.
+	GReaT, TabSyn, STASY – đây là các mô hình thuộc nhóm Transformer (dựa trên cơ chế Attention). Mặc dù về lý thuyết chúng rất mạnh và có thể đạt chất lượng sinh cao, chi phí tính toán là O(n²) và yêu cầu tài nguyên GPU lớn. Với hạ tầng và thời gian thực hiện đồ án có hạn, việc huấn luyện các mô hình này trên tập dữ liệu cỡ trung bình (hàng trăm nghìn dòng) là không khả thi và sẽ vượt quá thời gian cho phép. Đồ án ưu tiên tính khả thi và khả năng tái lập (reproducibility) hơn là theo đuổi mọi mô hình mới nhất.
+	Forest Diffusion – là mô hình lai ghép giữa Random Forest và Diffusion, rất mới (2023–2024). Tuy nhiên, mã nguồn chính thức chưa được kiểm định rộng rãi, tài liệu hướng dẫn còn hạn chế, tiềm ẩn rủi ro triển khai và gỡ lỗi. Đồ án cần một hệ thống ổn định để đo lường các chỉ số một cách nhất quán, do đó không mạo hiểm với một thư viện còn non trẻ.
+	Giảm thiểu hiện tượng ghi nhớ dữ liệu huấn luyện của mô hình mà không làm suy giảm đáng kể chất lượng của dữ liệu tổng hợp
+	Bối cảnh và động cơ áp dụng Differential Privacy
+Các mô hình tạo sinh như GAN, VAE hay Diffusion được thiết kế nhằm học phân phối xác suất của dữ liệu huấn luyện để tạo ra các mẫu mới có đặc điểm thống kê tương tự dữ liệu gốc. Mặc dù dữ liệu được sinh ra không phải là bản sao trực tiếp của dữ liệu huấn luyện, các nghiên cứu gần đây cho thấy mô hình vẫn có nguy cơ ghi nhớ (memorization) một số bản ghi cụ thể, đặc biệt là các mẫu hiếm hoặc có đặc điểm khác biệt so với phần lớn dữ liệu.
+Ví dụ, giả sử tập dữ liệu của một ngân hàng chứa thông tin về một khách hàng có đặc điểm rất đặc trưng, chẳng hạn một người 45 tuổi, sinh sống tại Hà Nội, có mức thu nhập rất cao và sở hữu lịch sử giao dịch khác biệt so với đa số khách hàng. Do đây là một mẫu ngoại lai (outlier), mô hình có thể học quá sát bản ghi này trong quá trình tối ưu.
+
+Khi sử dụng mô hình để sinh dữ liệu tổng hợp, một số bản ghi được tạo ra có thể rất giống với khách hàng nói trên. Mặc dù không hoàn toàn trùng khớp, mức độ tương đồng quá cao vẫn có thể làm tăng nguy cơ liên kết với dữ liệu thật (record linkage) hoặc hỗ trợ các cuộc tấn công suy luận (inference attacks).
+Hiện tượng này xuất phát từ khả năng biểu diễn rất lớn của các mô hình học sâu. Với số lượng tham số lớn, mô hình không chỉ học được các quy luật tổng quát của dữ liệu mà còn có thể ghi nhớ một phần thông tin của các mẫu huấn luyện nếu không có cơ chế kiểm soát phù hợp. Hiện tượng này thường được gọi là data memorization và được xem là một trong những nguyên nhân chính dẫn đến rủi ro rò rỉ quyền riêng tư trong các mô hình tạo sinh.
+Những rủi ro này có thể tạo điều kiện cho các cuộc tấn công như Membership Inference Attack (MIA), Attribute Inference Attack (AIA) hoặc Record Linkage Attack, từ đó làm lộ thông tin về các cá nhân trong tập dữ liệu gốc. Ngoài các tác động về mặt bảo mật, việc rò rỉ dữ liệu cá nhân còn có thể dẫn đến các vấn đề pháp lý khi không đáp ứng các quy định về bảo vệ dữ liệu, chẳng hạn như General Data Protection Regulation (GDPR) của Liên minh Châu Âu.
+Để giảm thiểu nguy cơ ghi nhớ dữ liệu huấn luyện, nhiều nghiên cứu đã đề xuất tích hợp Differential Privacy (DP) vào quá trình tối ưu mô hình. Trong số đó, Differentially Private Stochastic Gradient Descent (DP-SGD) là phương pháp được sử dụng phổ biến nhất nhờ khả năng cung cấp bảo đảm toán học về quyền riêng tư mà vẫn có thể tích hợp trực tiếp vào quy trình huấn luyện của các mô hình học sâu.
+	Lý do lựa chọn DP-SGD
+DP-SGD được lựa chọn vì ba lý do chính.
+Thứ nhất, phương pháp này cung cấp bảo đảm toán học của Differential Privacy. Cụ thể, việc thêm hoặc loại bỏ một bản ghi bất kỳ khỏi tập dữ liệu huấn luyện chỉ làm thay đổi phân phối đầu ra của thuật toán trong một giới hạn được kiểm soát bởi các tham số quyền riêng tư (εⓜ,δ).
+Thứ hai, DP-SGD có thể tích hợp trực tiếp vào quá trình huấn luyện của các mô hình học sâu mà không yêu cầu thay đổi kiến trúc mạng. Điều này cho phép áp dụng cùng một cơ chế bảo vệ cho nhiều mô hình tạo sinh khác nhau như CTGAN, CTVAE và Diffusion.
+Thứ ba, DP-SGD đã được cộng đồng nghiên cứu và nhiều tổ chức lớn áp dụng rộng rãi trong các bài toán học máy bảo vệ quyền riêng tư, đồng thời được hỗ trợ bởi các thư viện như Opacus dành cho PyTorch, giúp việc triển khai trở nên thuận tiện và đáng tin cậy.
+	Nguyên lý hoạt động của DP-SGD
+DP-SGD là phiên bản mở rộng của thuật toán Stochastic Gradient Descent (SGD), trong đó quá trình cập nhật tham số được điều chỉnh nhằm hạn chế ảnh hưởng của từng mẫu dữ liệu riêng lẻ.
+Trong SGD thông thường, gradient của một mini-batch được tính toán và sử dụng trực tiếp để cập nhật trọng số của mô hình. Do gradient chứa thông tin từ toàn bộ các mẫu trong mini-batch, các mẫu có ảnh hưởng lớn có thể khiến mô hình ghi nhớ những đặc điểm riêng biệt của chúng.
+Để khắc phục vấn đề này, DP-SGD bổ sung hai bước quan trọng trước khi cập nhật tham số.
+Gradient Clipping
+Ở bước đầu tiên, gradient của từng mẫu được tính riêng biệt và bị giới hạn bởi một ngưỡng C. Nếu chuẩn của gradient vượt quá ngưỡng này, gradient sẽ được co lại về đúng giá trị giới hạn.
+Việc giới hạn gradient giúp bảo đảm rằng không có một bản ghi đơn lẻ nào có thể tạo ra ảnh hưởng quá lớn đến quá trình tối ưu. Nhờ đó, tác động của các mẫu ngoại lai hoặc các bản ghi đặc biệt được kiểm soát hiệu quả hơn.
+Noise Injection
+Sau khi các gradient đã được giới hạn, DP-SGD bổ sung một lượng nhiễu ngẫu nhiên, thường được lấy từ phân phối Gaussian, vào gradient tổng trước khi cập nhật trọng số.
+Việc thêm nhiễu làm giảm khả năng suy luận về sự đóng góp của từng bản ghi trong tập huấn luyện. Mặc dù nhiễu có thể làm giảm nhẹ độ chính xác của mô hình, nó mang lại sự đánh đổi cần thiết giữa privacy và utility, giúp mô hình khó ghi nhớ các mẫu dữ liệu cụ thể hơn.
+	GIẢI PHÁP
+Đề tài thiết kế và huấn luyện kiến trúc Generative AI với 3 mô hình tiên tiến nhất: CTVAE, CTGAN và Tabular Diffusion.
+	Mô hình học từ bảng dữ liệu thật (Real Data), sau đó xuất ra một bảng dữ liệu tổng hợp (Synthetic Data).
+	Bảng dữ liệu tổng hợp này chứa 100% hồ sơ của "những con người không tồn tại" (giải quyết triệt để rủi ro pháp lý theo tiêu chuẩn Differential Privacy).
+	Giữ nguyên toàn bộ hình dáng phân phối thống kê của tập gốc. Khi đem tập dữ liệu GIẢ này đi huấn luyện mô hình ML (như XGBoost/Random Forest dự báo nợ xấu), độ chính xác của nó phải đạt mức tương đương 95-99% so với việc huấn luyện trực tiếp bằng tập dữ liệu THẬT (Tính chất ML Efficacy).
+	Đồng thời cũng giải quyết các vấn đề khác của dạng dữ liệu dạng bảng: mất cân bằng lớp, giá trị khuyết thiếu, và các ràng buộc logic cứng giữa các cột.
+Sản phẩm đầu ra của đề tài bao gồm Core Engine sinh dữ liệu và Hệ thống đo lường tự động (Audit Framework) nhằm nghiệm thu chặt chẽ 3 tiêu chí quan trọng của dữ liệu tổng hợp:
+	Độ tương đồng thống kê (Statistical Similarity): Đo lường bằng khoảng cách toán học để chứng minh cấu trúc, phân phối và sự tương quan chéo của tập giả khớp tới 95% so với tập gốc.
+	Tính an toàn bảo mật (Privacy Preserving): Chứng minh mô hình sinh ra dữ liệu mới thực sự, hoàn toàn không ghi nhớ (memorize) hay sao chép bất kỳ hồ sơ cá nhân thật nào của tập gốc.
+	Độ hữu dụng cho Machine Learning (ML Efficacy): Chứng minh tính thực tiễn bằng cách: Lấy dữ liệu tổng hợp để huấn luyện các mô hình dự báo nghiệp vụ (như XGBoost, Random Forest), và đạt được độ suy giảm hiệu năng (Accuracy Loss) ở mức cực thấp (< 5%) so với việc dùng dữ liệu thật.
+	QUY TRÌNH SINH DỮ LIỆU TỔNG HỢP (END-TO-END PIPELINE)
+	Tổng quan quy trình
+Quy trình gồm bốn giai đoạn:
+	Stage 1: Data Ingestion & Sanitation (Thu thập và làm sạch dữ liệu gốc)
+	Stage 2: Mathematical Feature Modeling (Tiền xử lý và biểu diễn đặc trưng)
+	Stage 3: Deep Generative Modeling (Huấn luyện mô hình sinh dữ liệu)
+	Stage 4: Synthetic Data Generation & Quality Auditing (Sinh dữ liệu tổng hợp và kiểm định chất lượng)
+Đầu ra của mỗi giai đoạn được sử dụng làm đầu vào cho giai đoạn tiếp theo.
+Stage 1. Data Ingestion & Sanitation
+Mục tiêu
+Thu thập dữ liệu thô và loại bỏ các thông tin định danh trực tiếp (Direct Personally Identifiable Information – Direct PII) để bảo vệ quyền riêng tư pháp lý.
+Chủ thể thực hiện
+	Data Owner (Doanh nghiệp sở hữu dữ liệu): cung cấp dữ liệu gốc.
+	Data Ingestion & Processing Engine: tải và làm sạch dữ liệu.
+Đầu vào
+	Dữ liệu thô từ cơ sở dữ liệu hoặc các tệp nguồn (CSV, Excel, Parquet).
+	Tệp cấu hình YAML: Khai báo nguồn dữ liệu, định dạng đọc dữ liệu và danh sách các thuộc tính định danh trực tiếp cần loại bỏ trước khi xử lý.
+Các bước xử lý
+	Loại bỏ các thuộc tính định danh trực tiếp (các thông tin chỉ cần đứng độc lập là có thể chỉ ra chính xác danh tính của một cá nhân cụ thể) bao gồm họ tên, số căn cước, số điện thoại, địa chỉ, email, số tài khoản ngân hàng, v.v.
+	Các trường này không có giá trị học máy vì chúng mang tính duy nhất cho từng dòng (high cardinality / unique key) và việc giữ lại chúng vi phạm trực tiếp các luật bảo vệ dữ liệu cá nhân.
+	Chia tách dữ liệu (Train/Test Split): Tập dữ liệu sau khi loại bỏ PII được chia thành hai phần theo tỷ lệ 80/20. Tập huấn luyện (Real Train, 80%) được sử dụng để fit bộ tiền xử lý và huấn luyện mô hình sinh ở các Stage tiếp theo. Tập kiểm thử (Real Test, 20%) được cô lập hoàn toàn và chỉ sử dụng duy nhất ở Stage 4 làm căn cứ đánh giá chất lượng độc lập. Việc cô lập này là điều kiện bắt buộc để đảm bảo tính hợp lệ của các phép đánh giá Membership Inference Attack (MIA), DCR Leakage và TSTR.
+Đầu ra
+	Tập Real Train (80% dữ liệu thô đã làm sạch PII): dùng cho Stage 2 và Stage 3.
+	Tập Real Test (20% dữ liệu thô đã làm sạch PII): được cô lập hoàn toàn, chỉ sử dụng ở Stage 4.
+Stage 2. Mathematical Feature Modeling
+Mục tiêu
+Thực hiện phân tích lược đồ dữ liệu (schema) để xác định kiểu của từng thuộc tính và áp dụng các phép tiền xử lý phù hợp, bao gồm xử lý dữ liệu khuyết, mã hóa các biến phân loại và chuẩn hóa các biến liên tục. Sau khi hoàn tất, dữ liệu được chuyển đổi sang dạng biểu diễn số phục vụ quá trình huấn luyện các mô hình học sâu. Đồng thời, toàn bộ tham số của bộ tiền xử lý và thông tin về kiểu dữ liệu gốc của từng thuộc tính được lưu trữ để sử dụng trong quá trình biến đổi ngược (inverse transformation), nhằm khôi phục dữ liệu tổng hợp về đúng định dạng bảng ở Stage 4.
+Chủ thể thực hiện
+	Preprocessing Engine
+Đầu vào
+	Tập Real Train thu được từ Stage 1.
+	2 tệp cấu hình YAML:
+	Cung cấp thông tin về cấu trúc của tập dữ liệu, bao gồm các thuộc tính liên tục, thuộc tính phân loại, các thuộc tính định danh trực tiếp cần loại bỏ và các thông tin cần thiết để lựa chọn phương pháp tiền xử lý phù hợp cho từng cột.
+	Xác định các tham số của quy trình tiền xử lý, chẳng hạn như chiến lược mã hóa đối với các biến phân loại, phương pháp xử lý dữ liệu khuyết và các tham số chuẩn hóa được sử dụng trong toàn bộ pipeline.
+Các bước xử lý
+	Phân tích lược đồ dữ liệu (Schema Profiling): Xác định kiểu của từng thuộc tính trong tập dữ liệu, bao gồm các biến liên tục và biến phân loại, làm cơ sở để lựa chọn phương pháp tiền xử lý phù hợp.
+	Lưu trữ thông tin kiểu dữ liệu: Ghi nhận kiểu dữ liệu gốc của các thuộc tính nhằm hỗ trợ quá trình biến đổi ngược (inverse transformation), bảo đảm dữ liệu tổng hợp sau khi giải mã có định dạng nhất quán với dữ liệu ban đầu.
+	Chuẩn hóa kiểu dữ liệu: Chuyển các thuộc tính liên tục về dạng số và xác định các giá trị khuyết để phục vụ quá trình xử lý tiếp theo.
+	Xử lý dữ liệu khuyết (Missing Data Modeling): Đối với mỗi thuộc tính có chứa giá trị khuyết, tạo thêm một biến chỉ báo nhị phân (missing indicator) phản ánh trạng thái khuyết của từng bản ghi. Đồng thời, các giá trị khuyết được thay thế bằng trung vị (Median) đối với biến liên tục hoặc yếu vị (Mode) đối với biến phân loại. Cách tiếp cận này giúp mô hình học được cả giá trị của thuộc tính và quy luật xuất hiện của dữ liệu khuyết.
+	Mã hóa các biến phân loại (Categorical Encoding): Chuyển các thuộc tính phân loại sang dạng biểu diễn số. Đối với các thuộc tính có số lượng giá trị nhỏ, sử dụng One-Hot Encoding nhằm tránh tạo quan hệ thứ tự giả giữa các nhãn. Đối với các thuộc tính có số lượng giá trị lớn, áp dụng phương pháp mã hóa có số chiều thấp hơn nhằm giảm hiện tượng dữ liệu thưa và nâng cao hiệu quả tính toán.
+	Chuẩn hóa các biến liên tục (Continuous Normalization): Chuẩn hóa các biến liên tục về cùng miền giá trị bằng phương pháp Min–Max Scaling. Các tham số chuẩn hóa chỉ được ước lượng từ tập huấn luyện và được sử dụng nhất quán trong toàn bộ pipeline.
+	Lưu trữ bộ tiền xử lý: Toàn bộ các phép biến đổi cùng các tham số tương ứng được lưu trữ để tái sử dụng trong các giai đoạn tiếp theo. Việc này bảo đảm tính nhất quán giữa quá trình tiền xử lý và quá trình biến đổi ngược, đồng thời giúp dữ liệu tổng hợp có thể được khôi phục về đúng định dạng của dữ liệu gốc.
+Đầu ra
+	Tập dữ liệu đã được tiền xử lý dưới dạng tensor số phục vụ huấn luyện mô hình
+	Bộ tiền xử lý được lưu trữ để sử dụng trong các giai đoạn sinh dữ liệu và biến đổi ngược.
+Ý nghĩa
+Việc lưu trữ toàn bộ tham số của bộ tiền xử lý được xây dựng từ tập Real Train giúp bảo đảm tính nhất quán giữa quá trình biến đổi dữ liệu (forward transformation) và biến đổi ngược (inverse transformation) trong toàn bộ pipeline.
+Stage 3. Deep Generative Modeling
+Mục tiêu
+Huấn luyện mô hình sinh dữ liệu sâu (CTGAN, CTVAE hoặc Tabular Diffusion) nhằm học và xấp xỉ phân phối xác suất đa biến của tập dữ liệu thật. Trong trường hợp yêu cầu bảo vệ quyền riêng tư, quá trình huấn luyện được tích hợp cơ chế bảo mật vi sai DP-SGD để giảm nguy cơ rò rỉ thông tin từ dữ liệu huấn luyện.
+Chủ thể thực hiện
+	Generative Model Training Engine
+Đầu vào
+	Mảng dữ liệu Real Train đã tiền xử lý ở Stage 2.
+	2 tệp cấu hình YAML:
+	Xác định mô hình sinh dữ liệu được sử dụng (CTGAN, CTVAE hoặc Tabular Diffusion) cùng các siêu tham số huấn luyện.
+	Cấu hình các tham số của cơ chế bảo mật vi sai, bao gồm ngân sách quyền riêng tư (ε) và các tham số liên quan đến DP-SGD.
+Các bước xử lý
+	Khởi tạo mô hình sinh dữ liệu: Xây dựng kiến trúc của mô hình sinh dữ liệu được lựa chọn (CTGAN, CTVAE hoặc Tabular Diffusion) và khởi tạo các tham số phục vụ quá trình huấn luyện. Đối với các mô hình áp dụng bảo mật vi sai, các lớp chuẩn hóa được thiết kế tương thích với cơ chế tính gradient trên từng mẫu nhằm đáp ứng yêu cầu của DP-SGD.
+	Lấy mẫu có điều kiện (Conditional Sampling): Đối với các biến phân loại, áp dụng cơ chế lấy mẫu có điều kiện trong quá trình huấn luyện nhằm tăng tần suất xuất hiện của các lớp ít mẫu, từ đó giảm ảnh hưởng của hiện tượng mất cân bằng dữ liệu và cải thiện khả năng học phân phối của mô hình.
+	Tối ưu hàm mục tiêu: Mỗi mô hình được huấn luyện bằng hàm mất mát đặc trưng tương ứng với kiến trúc của nó. CTGAN sử dụng hàm mất mát Wasserstein kết hợp Gradient Penalty nhằm ổn định quá trình huấn luyện đối kháng; CTVAE tối ưu hàm mất mát ELBO, kết hợp sai số tái tạo và độ lệch Kullback–Leibler; trong khi Tabular Diffusion học quá trình khử nhiễu thông qua hàm mất mát dự báo nhiễu và có thể tích hợp thêm các ràng buộc nghiệp vụ dưới dạng hàm phạt mềm (soft constraint penalty).
+	Huấn luyện với bảo mật vi sai (Differential Privacy): Khi yêu cầu bảo vệ quyền riêng tư được kích hoạt, quá trình tối ưu sử dụng cơ chế Differentially Private Stochastic Gradient Descent (DP-SGD), bao gồm tính gradient trên từng mẫu, kẹp chuẩn gradient và bổ sung nhiễu Gauss trước khi cập nhật tham số mô hình. Cơ chế này giúp hạn chế nguy cơ rò rỉ thông tin từ dữ liệu huấn luyện.
+	Điều kiện dừng huấn luyện: Quá trình huấn luyện được theo dõi liên tục thông qua giá trị hàm mất mát và áp dụng cơ chế dừng sớm (Early Stopping) khi mô hình đạt trạng thái hội tụ, nhằm giảm nguy cơ quá khớp (overfitting) và tiết kiệm chi phí tính toán.
+	Lưu trữ mô hình: Sau khi hoàn tất huấn luyện, trạng thái của mô hình được lưu trữ để sử dụng trong giai đoạn sinh dữ liệu tổng hợp ở Stage 4.
+Đầu ra
+	Tệp checkpoint mô hình sinh học sâu đã huấn luyện hoàn tất.
+Ý nghĩa
+Đây là giai đoạn trung tâm của toàn bộ pipeline. Sau khi hoàn thành, mô hình có thể được sử dụng nhiều lần để sinh dữ liệu tổng hợp mà không cần truy cập lại dữ liệu thật.
+Stage 4. Synthetic Data Generation & Quality Auditing
+Mục tiêu
+Sử dụng mô hình đã được huấn luyện để sinh dữ liệu tổng hợp, thực hiện biến đổi ngược nhằm khôi phục dữ liệu về định dạng bảng ban đầu, áp dụng các ràng buộc nghiệp vụ để hiệu chỉnh hoặc loại bỏ các bản ghi không hợp lệ, sau đó đánh giá chất lượng dữ liệu theo ba tiêu chí Fidelity, Privacy và Utility. Cuối cùng, hệ thống tạo các biểu đồ trực quan và báo cáo đánh giá, làm căn cứ cho quá trình nghiệm thu và chia sẻ dữ liệu tổng hợp.
+Chủ thể thực hiện
+	Synthetic Data Generator
+	Quality Assessment Engine
+	Visual Overlay & Reporting Engine
+Đầu vào
+	Trọng số của mô hình sinh dữ liệu sau huấn luyện (file `.pt`)
+	Bộ tiền xử lý đã được lưu trữ từ Stage 2 (file `.joblib`)
+	Tập Real Test đã được cô lập hoàn toàn từ Stage 1 (phục vụ đánh giá chất lượng độc lập): đây là tập dữ liệu mà mô hình sinh chưa từng được tiếp xúc trong suốt quá trình huấn luyện, đảm bảo tính hợp lệ của các phép đánh giá MIA, DCR Leakage và TSTR.
+Các bước xử lý
+	Sinh dữ liệu tổng hợp (Synthetic Data Sampling): Sử dụng mô hình đã được huấn luyện để sinh các bản ghi mới trong không gian đặc trưng đã được tiền xử lý. Đối với mô hình khuếch tán (Tabular Diffusion), quá trình lấy mẫu được thực hiện thông qua chuỗi khử nhiễu ngược (reverse diffusion process) nhằm tái tạo dữ liệu từ nhiễu ngẫu nhiên.
+	Biến đổi ngược (Inverse Transformation): Dữ liệu tổng hợp được chuyển từ không gian đặc trưng trở về định dạng bảng ban đầu bằng bộ tiền xử lý đã xây dựng ở Stage 2. Quá trình này bao gồm giải mã các biến phân loại, khôi phục các giá trị khuyết theo biến chỉ báo, hoàn nguyên các biến liên tục về thang đo ban đầu và phục hồi kiểu dữ liệu gốc của từng thuộc tính.
+	Hiệu chỉnh ràng buộc nghiệp vụ (Constraint Enforcement): Dữ liệu sau khi giải mã được kiểm tra theo các ràng buộc nghiệp vụ và miền giá trị đã xác định. Những bản ghi vi phạm tính nhất quán logic hoặc vượt ngoài phạm vi hợp lệ được hiệu chỉnh hoặc loại bỏ nhằm bảo đảm chất lượng của tập dữ liệu tổng hợp.
+	Đánh giá chất lượng dữ liệu (Quality Assessment): Dữ liệu tổng hợp được đánh giá theo ba tiêu chí:
+	Fidelity: Đo mức độ tương đồng về phân phối thống kê giữa dữ liệu tổng hợp và dữ liệu thật thông qua các chỉ số như Jensen–Shannon Divergence (JSD), Wasserstein Distance và Correlation Difference.
+	Privacy: Đánh giá khả năng bảo vệ quyền riêng tư bằng các chỉ số như Distance to Closest Record (DCR), Nearest Neighbour Distance Ratio (NNDR), tỷ lệ rò rỉ dữ liệu (DCR Leakage Rate), cùng các kịch bản tấn công Membership Inference Attack (MIA) và Attribute Inference Attack (AIA).
+	Utility: Đánh giá khả năng sử dụng của dữ liệu tổng hợp thông qua giao thức Train Synthetic, Test Real (TSTR) và so sánh với đường cơ sở Train Real, Test Real (TRTR) trên các mô hình học máy được lựa chọn.
+	Trực quan hóa và lập báo cáo: Hệ thống tự động tạo các biểu đồ so sánh giữa dữ liệu thật và dữ liệu tổng hợp, bao gồm phân phối của các thuộc tính, ma trận tương quan và các chỉ số đánh giá bảo mật. Đồng thời, toàn bộ kết quả được tổng hợp thành báo cáo đánh giá để phục vụ quá trình nghiệm thu và chia sẻ dữ liệu.
+Đầu ra
+	Tập dữ liệu tổng hợp
+	Dữ liệu tổng hợp sau khi hoàn tất quá trình sinh, biến đổi ngược và kiểm tra các ràng buộc nghiệp vụ. Chỉ những bản ghi thỏa mãn các quy tắc về kiểu dữ liệu, miền giá trị và tính nhất quán logic mới được giữ lại để bàn giao hoặc sử dụng trong các bài toán phân tích và phát triển mô hình AI.
+	Báo cáo đánh giá chất lượng:
+	Báo cáo tổng hợp các chỉ số đánh giá theo ba tiêu chí gồm độ trung thực (Fidelity), mức độ bảo vệ quyền riêng tư (Privacy) và giá trị sử dụng (Utility).
+	Các biểu đồ trực quan:
+	Biểu đồ phối của từng thuộc tính, ma trận tương quan và các biểu đồ đánh giá khoảng cách, mức độ rò rỉ dữ liệu.
+Ý nghĩa
+Đây là giai đoạn cuối cùng trước khi dữ liệu được chia sẻ cho đơn vị phát triển AI. Chỉ những tập dữ liệu đáp ứng đồng thời các yêu cầu về Fidelity, Privacy và Utility mới được xem là đủ điều kiện để sử dụng trong các bài toán phân tích dữ liệu và huấn luyện mô hình học máy.
+	Kịch bản ứng dụng dữ liệu tổng hợp
+Dữ liệu tổng hợp không được tạo ra để thay thế hoàn toàn dữ liệu thật, mà nhằm giải quyết bài toán chia sẻ dữ liệu trong khi vẫn đảm bảo quyền riêng tư. Một kịch bản ứng dụng điển hình gồm ba chủ thể chính:
+	Doanh nghiệp sở hữu dữ liệu (Data Owner): Là đơn vị thu thập và quản lý dữ liệu thật của khách hàng. Doanh nghiệp chịu trách nhiệm bảo vệ dữ liệu gốc và là đơn vị duy nhất được phép truy cập đầy đủ vào tập dữ liệu thật.
+	Đơn vị phát triển AI (AI Developer): Là nhóm nội bộ hoặc đối tác bên ngoài có nhiệm vụ xây dựng mô hình học máy. Đơn vị này chỉ được phép sử dụng dữ liệu tổng hợp và không được truy cập dữ liệu thật.
+	Hệ thống sinh dữ liệu tổng hợp (Synthetic Data Generator): Là thành phần trung gian được triển khai trong môi trường của doanh nghiệp. Hệ thống sử dụng dữ liệu thật để huấn luyện mô hình sinh dữ liệu và tạo ra tập dữ liệu tổng hợp phục vụ chia sẻ.
+	Quy trình chia sẻ dữ liệu
+Bước 1. Doanh nghiệp quản lý dữ liệu thật
+Doanh nghiệp thu thập và lưu trữ dữ liệu khách hàng trong hệ thống nội bộ. Dữ liệu này có thể chứa các thông tin nhạy cảm như thông tin định danh, lịch sử giao dịch hoặc hồ sơ sức khỏe tùy theo lĩnh vực hoạt động.
+Trong giai đoạn này:
+	Doanh nghiệp được phép truy cập và xử lý dữ liệu thật.
+	Doanh nghiệp không chia sẻ trực tiếp dữ liệu thật cho bất kỳ tổ chức hoặc cá nhân bên ngoài nào.
+Đầu vào của bước này là dữ liệu phát sinh từ hoạt động kinh doanh; đầu ra là tập dữ liệu thật được lưu trữ trong môi trường bảo mật.
+Bước 2. Sinh dữ liệu tổng hợp
+Hệ thống sinh dữ liệu tổng hợp được triển khai bên trong hạ tầng của doanh nghiệp. Mô hình sinh dữ liệu được huấn luyện trên dữ liệu thật nhằm học các đặc trưng thống kê và phân phối xác suất của tập dữ liệu.
+Sau khi hoàn tất quá trình huấn luyện, hệ thống sinh ra một tập dữ liệu tổng hợp mới.
+Trong giai đoạn này:
+	Hệ thống sinh dữ liệu được phép sử dụng dữ liệu thật để huấn luyện.
+	Dữ liệu thật không rời khỏi môi trường của doanh nghiệp.
+	Chỉ dữ liệu tổng hợp được tạo ra để phục vụ bước tiếp theo.
+Đầu ra của bước này là tập dữ liệu tổng hợp đã được đánh giá về Fidelity, Privacy và Utility.
+Bước 3. Chia sẻ dữ liệu tổng hợp
+Sau khi đạt các tiêu chí đánh giá, doanh nghiệp chuyển giao dữ liệu tổng hợp cho đơn vị phát triển AI.
+Trong giai đoạn này:
+	Đơn vị phát triển AI được phép truy cập toàn bộ dữ liệu tổng hợp.
+	Đơn vị phát triển AI không được phép truy cập dữ liệu thật hoặc yêu cầu doanh nghiệp cung cấp dữ liệu thật.
+	Doanh nghiệp vẫn giữ toàn quyền quản lý tập dữ liệu gốc.
+Như vậy, dữ liệu tổng hợp đóng vai trò là cầu nối giữa doanh nghiệp và đơn vị phát triển AI, giúp giảm nguy cơ rò rỉ dữ liệu trong quá trình chia sẻ.
+	Quy trình phát triển mô hình AI
+Sau khi nhận được dữ liệu tổng hợp, đơn vị phát triển AI tiến hành xây dựng mô hình học máy.
+Các công việc bao gồm:
+	tiền xử lý dữ liệu;
+	lựa chọn đặc trưng;
+	huấn luyện mô hình;
+	tối ưu siêu tham số;
+	đánh giá trên tập dữ liệu tổng hợp.
+Trong toàn bộ quá trình này:
+	Đơn vị phát triển AI chỉ làm việc với dữ liệu tổng hợp.
+	Đơn vị phát triển AI không có quyền truy cập dữ liệu thật hoặc đối chiếu dữ liệu tổng hợp với dữ liệu gốc.
+	Doanh nghiệp không tham gia vào quá trình huấn luyện mô hình.
+Kết quả cuối cùng của giai đoạn này là mô hình AI đã được huấn luyện cùng các tệp cấu hình và tham số của mô hình. Chỉ mô hình được bàn giao lại cho doanh nghiệp; dữ liệu tổng hợp không cần được gửi trả.
+	Quy trình nghiệm thu mô hình
+Sau khi nhận mô hình AI, doanh nghiệp tiến hành đánh giá trong môi trường nội bộ (sandbox). Đây là môi trường cách ly chỉ cho phép doanh nghiệp truy cập dữ liệu thật.
+Trong giai đoạn này:
+	Doanh nghiệp được phép sử dụng dữ liệu thật để đánh giá mô hình.
+	Đơn vị phát triển AI không được phép truy cập môi trường sandbox hoặc quan sát dữ liệu thật trong quá trình kiểm thử.
+	Chỉ các kết quả đánh giá cuối cùng (ví dụ Accuracy, F1-score hoặc AUC-ROC) được thông báo cho đơn vị phát triển AI nếu cần thiết.
+Đối với nghiên cứu này, hiệu năng của mô hình được đánh giá theo giao thức Train Synthetic, Test Real (TSTR). Mô hình được huấn luyện hoàn toàn trên dữ liệu tổng hợp nhưng được kiểm thử trên dữ liệu thật và so sánh với mô hình Train Real, Test Real (TRTR). Nếu hiệu năng đạt ngưỡng yêu cầu (ví dụ F1-macro đạt tối thiểu 90% so với TRTR), mô hình được xem là đáp ứng yêu cầu triển khai.
+Toàn bộ quy trình trên bảo đảm rằng dữ liệu thật chỉ tồn tại trong phạm vi doanh nghiệp, trong khi đơn vị phát triển AI vẫn có thể xây dựng và tối ưu mô hình bằng dữ liệu tổng hợp. Điều này giúp giảm đáng kể rủi ro rò rỉ dữ liệu mà vẫn duy trì hiệu quả phát triển các ứng dụng trí tuệ nhân tạo.
+
+IMPLEMENT CHI TIẾT
+
+Phần này trình bày End-to-End Pipeline của hệ thống, bao phủ toàn bộ các module trong mã nguồn. Mỗi bước kỹ thuật đều được lý giải chuyên sâu từ góc độ nghiệp vụ thực tế và khoa học ML/DL, giải thích vì sao chúng ta phải thiết kế như vậy để giải quyết bài toán bảo vệ quyền riêng tư mà không làm suy giảm giá trị dữ liệu.
+
+V. Stage 1: Thu thập và Làm sạch dữ liệu (Data Ingestion & Sanitation)
+Giai đoạn này là cổng kiểm soát đầu vào duy nhất (`run_pipeline.py`), đảm bảo tính chuẩn xác của dữ liệu trước khi đi vào các biến đổi toán học.
+
+1. Cố định hạt giống ngẫu nhiên (Global Seed Stabilization)
+• Triển khai: Thiết lập seed cố định cho `random`, `np.random`, `torch.manual_seed` và `torch.cuda.manual_seed_all`. Tắt benchmark cudnn để triệt tiêu tính bất định trên GPU.
+• Lý do khoa học: Bảo đảm tính tái lập (reproducibility) 100%. Khái niệm "Tái lập" nghĩa là chạy lại mã nguồn nhiều lần vẫn ra đúng một kết quả duy nhất. Nếu không cố định, kết quả so sánh giữa mô hình non-DP và DP, hoặc giữa các kiến trúc sẽ mất đi ý nghĩa khoa học vì bị nhiễu bởi khởi tạo ngẫu nhiên.
+
+2. Khử nhận dạng trực tiếp (PII Scrubbing) và Tuyến phòng thủ kép
+• Triển khai: Hệ thống đọc YAML và loại bỏ ngay lập tức các cột định danh trực tiếp (Direct PII: customerID, số điện thoại, email).
+• Lý do nghiệp vụ & khoa học: Đây là yêu cầu pháp lý bắt buộc (Phòng thủ tầng 1). Các thuộc tính gần định danh (Quasi-identifiers như tuổi, giới tính, vùng miền) được giữ lại vì chúng chứa thông tin phân phối cốt lõi cho ML. Việc bảo vệ Quasi-identifiers khỏi tấn công tái định danh được giao cho cơ chế DP-SGD ở Stage 3 (Phòng thủ tầng 2 - có bảo đảm toán học), tạo ra an toàn tuyệt đối mà không phá hủy hoàn toàn cấu trúc dữ liệu.
+
+3. Ước lượng bộ nhớ động (OOM Guard)
+• Triển khai: Đọc thử 1,000 dòng, dùng `memory_usage()` tính byte/row, tính toán phân bổ `chunk_rows` dựa trên 10% RAM hệ thống.
+• Lý do nghiệp vụ: Trong thực tế Big Data, việc load toàn bộ file CSV hàng chục GB vào RAM sẽ gây lỗi tràn bộ nhớ (Out-Of-Memory - OOM). OOM Guard đảm bảo pipeline hoạt động ổn định trên mọi môi trường phần cứng mà không cần người dùng can thiệp thủ công.
+
+4. Quy trình phân chia Train/Test đối chứng (Train/Test Split)
+• Triển khai: Dữ liệu (sau khi xóa PII) được chia Stratified 80/20 thành Real Train và Real Test. Lấy mẫu phân tầng (Stratified) đảm bảo tỷ lệ các nhãn (class) trong tập Train và Test hoàn toàn giống với tập gốc.
+• Lý do khoa học: Chống Data Leakage (Rò rỉ dữ liệu - hiện tượng mô hình "học lén" thông tin từ tập kiểm thử). Tập Real Test được cô lập hoàn toàn, không tham gia vào bất kỳ quá trình nội suy hay chuẩn hóa nào. Nếu tập Test lọt vào scaler, tham số Min-Max sẽ bị sai lệch, phá hỏng hoàn toàn độ tin cậy của thuật toán đo khoảng cách Euclid trong bài toán MIA và DCR. Tập Test này là thước đo chuẩn mực cuối cùng (Ground Truth) để đánh giá Utility và Privacy ở Stage 4.
+
+VI. Stage 2: Mã hóa & Chuẩn hóa toán học (Mathematical Feature Modeling)
+Thực thi tại `preprocessing/pipeline.py`. Biến đổi dữ liệu thô thành mảng tensor.
+
+1. Lập lược đồ dữ liệu động và Ghi nhận kiểu gốc (Schema Profiling & Dtype Recording)
+• Triển khai: Tự động phân loại biến Continuous (liên tục) và Categorical (phân loại). Ghi lại kiểu dữ liệu thô (ví dụ: `int64`) vào `_original_dtypes`.
+• Lý do nghiệp vụ: Không bắt người dùng tự gán nhãn hàng trăm cột. Việc lưu dtype gốc là cực kỳ quan trọng để Stage 4 có thể ép kiểu ngược (type-casting) trở lại chính xác (vd: không để "tuổi" bị lẻ thập phân do quá trình tính toán ma trận).
+
+2. Coercion kiểu số và Xử lý khuyết thiếu (Missing Data Modeling)
+• Triển khai: Ép kiểu số học cưỡng chế (Coercion) bằng `pd.to_numeric(errors='coerce')` để biến mọi giá trị rác thành NaN. Nếu cột có NaN, tạo cột chỉ báo nhị phân `<col>_is_missing`. Điền ô trống bằng giá trị lính gác Sentinel (-999, một số nằm ngoài miền giá trị thực tế) hoặc Median/Mode.
+• Lý do khoa học: Khuyết thiếu dữ liệu trong thực tế thường mang quy luật (vd: khách hàng chưa hủy hợp đồng thì không có lý do hủy). Nếu chỉ điền Median, ta sẽ tạo ra một "đỉnh nhân tạo" (artificial spike) làm méo mó phân phối xác suất gốc. Cột chỉ báo giúp mạng Neural hiểu "khuyết thiếu" là một trạng thái ẩn (latent state) biệt lập. Ở Stage 4, bộ giải mã dựa vào cờ này để khôi phục chính xác NaN thực tế.
+
+3. Chiến lược mã hóa kép tối ưu tài nguyên (Double Encoding Strategy)
+• Triển khai: Categorical có cardinality (số lượng lớp) thấp (<=10) dùng One-Hot. Cardinality cao dùng Scaled Label Encoding (đánh số nguyên rồi chia cho K-1). Continuous dùng MinMax khóa theo Train.
+• Lý do khoa học: Nếu One-hot toàn bộ, ma trận tensor sẽ phình to khủng khiếp chứa toàn số 0 (hiện tượng Sparsity explosion - Bùng nổ độ thưa). Điều này làm đạo hàm (gradient) suy biến và tốn RAM GPU vô ích. Trì hoãn One-hot và sử dụng Label Encoding cho biến phân loại nhiều lớp giúp hệ thống vận hành trơn tru. Scaling MinMax bảo đảm các đặc trưng có biên độ đồng đều, giúp hàm loss không bị chệch hướng khi tối ưu.
+
+4. Đóng gói bảo chứng toàn vẹn (State Serialization)
+• Triển khai: Export pipeline ra tệp `joblib` kèm mã băm SHA256.
+• Lý do nghiệp vụ: Khi chuyển giao mô hình giữa môi trường huấn luyện và triển khai, bất kỳ sự xáo trộn trong thứ tự cột hay tham số encode nào đều dẫn tới rác dữ liệu sinh ra. Khái niệm SHA256 đóng vai trò là "con tem số" bảo chứng tính toàn vẹn của cỗ máy tiền xử lý.
+
+VII. Stage 3: Huấn luyện học sâu và Bảo mật vi sai (Deep Generative Modeling)
+Thực thi tại `training/trainer.py` và các module `models/`.
+
+1. Cơ chế lấy mẫu có điều kiện dùng chung (Shared Conditional Vector)
+• Triển khai: Sampler thống kê tần suất categorical, tính xác suất chọn tỷ lệ nghịch để lấy mẫu trội (oversample) các lớp thiểu số.
+• Lý do khoa học: Giải quyết triệt để bài toán Imbalanced Data (mất cân bằng lớp) và lỗi Mode Collapse (Sụp đổ mode - hiện tượng mô hình sinh lười biếng chỉ tạo ra một loại dữ liệu nhàm chán lặp đi lặp lại). Bằng cách ép mô hình tập trung vào nhóm thiểu số, nó sẽ học được toàn bộ bức tranh phân phối.
+
+2. Thiết kế LayerNorm đồng bộ
+• Triển khai: Tất cả mạng con đều dùng Layer Normalization thay vì Batch Normalization.
+• Lý do khoa học: BatchNorm tính trung bình/phương sai trên toàn bộ lô (batch), làm rò rỉ thông tin của một mẫu này sang mẫu khác (cross-sample leakage) và phá vỡ nguyên lý DP-SGD. LayerNorm cô lập gradient trên từng mẫu cá nhân, đảm bảo tính riêng tư hoàn hảo.
+
+3. Ba kiến trúc mô hình sinh (No Free Lunch)
+• Triển khai: Hỗ trợ CTGAN (tối ưu hóa đối kháng bằng Wasserstein GAN và Gradient Penalty), CTVAE (tối ưu hóa Evidence Lower Bound - ELBO để cân bằng sai số tái tạo và độ lệch Kullback–Leibler), Tabular Diffusion (tối ưu hóa MSE Loss dự báo nhiễu với Cosine Schedule).
+• Lý do khoa học & nghiệp vụ: Định lý No Free Lunch (Không có bữa trưa miễn phí) trong AI chỉ ra không có thuật toán nào tốt nhất cho mọi loại bài toán. CTGAN mạnh với dữ liệu phi tuyến nhưng khó train; CTVAE cực kỳ ổn định và hợp với DP-SGD; Diffusion (SOTA - State of the art) sinh dữ liệu với tương quan đa biến hoàn hảo nhất. Hỗ trợ cả ba giúp hội đồng/người dùng tìm "sweet spot" cho mọi loại dữ liệu.
+
+4. Cơ chế Bảo mật vi sai (DP-SGD) và Hạn chế ghi nhớ mẫu
+• Triển khai: Tích hợp Opacus (thư viện của PyTorch) để tính gradient độc lập từng mẫu, kẹp gradient (clipping) và tiêm nhiễu Gauss. Tích hợp Early Stopping (dừng sớm) và Weight Decay (phạt trọng số L2).
+• Lý do khoa học: Ngăn chặn triệt để Membership Inference Attack (Tấn công suy luận thành viên). Kẹp gradient giới hạn mức độ ảnh hưởng của một mẫu ngoại lai (vd: bệnh nhân có triệu chứng hiếm), và nhiễu Gauss sẽ che lấp mẫu đó hoàn toàn. DP cung cấp sự đảm bảo toán học qua hai tham số Epsilon, Delta (Ngân sách quyền riêng tư - Epsilon càng nhỏ càng an toàn). Đồng thời, tối ưu siêu tham số DP yêu cầu Batch size lớn (√N) để làm mượt gradient, chống lại tác động phá hủy của nhiễu Gauss.
+
+VIII. Stage 4: Lấy mẫu, Hiệu chỉnh ràng buộc & Kiểm định đa chiều
+Thực thi tại `sampler.py`, `constraints.py`, và `evaluation/`.
+
+1. Lấy mẫu ổn định trên Diffusion (Sampling Stabilization)
+• Triển khai: Bật `clip_denoised = True`, ước lượng ngược bản ghi sạch (x0_approx) và kẹp cứng vào miền chuẩn hóa [0, 1] ở mỗi bước khử nhiễu. Loại bỏ hàm kích hoạt Sigmoid ở đầu ra, thay bằng Clamp (kẹp tuyến tính).
+• Lý do khoa học: Ở những bước T lớn (nhiều nhiễu), mẫu số của hàm phân phối DDPM tiến về 0, khuếch đại sai số khổng lồ khiến giá trị dự báo bị "nổ". Cắt bỏ Sigmoid và dùng Clamp giúp triệt tiêu hiện tượng oversmoothing/vanishing gradient (đạo hàm triệt tiêu ở hai đầu mút), đem lại khoảng cách tự nhiên nhất cho tập giả lập.
+
+2. Giải mã ngược và Hiệu chỉnh ràng buộc nghiệp vụ (Inverse & Constraints Engine)
+• Triển khai: Giải mã theo thứ tự bắt buộc: Inverse Scaler -> Inverse Encoder -> Missing State Restoration -> Type Casting. Sau đó qua Constraints Engine (Bộ xử lý hậu kiểm).
+• Lý do nghiệp vụ & khoa học: Phải Inverse Scaler TRƯỚC để khôi phục sentinel value (-999). Nếu kiểm tra cờ is_missing trước, thuật toán sẽ so sánh nhầm với giá trị đã bị scale (ví dụ -9.83). Về mặt Constraints: AI chỉ học thống kê, không học luật kinh doanh (sinh ra khách dùng 0 tháng nhưng tổng cước > 0). Constraints Engine đóng vai trò "cảnh sát" kẹp biên hoặc reject sampling (từ chối mẫu sai), bảo đảm dữ liệu bàn giao 100% hợp lệ thực tế.
+
+3. Khung kiểm định đa chiều (Audit Framework)
+Cung cấp bằng chứng định lượng (Empirical Evidence) cho đối tác:
+• Fidelity (Độ trung thực): Dùng JSD (Jensen-Shannon Divergence - đo độ lệch phân phối xác suất phân loại) và Wasserstein (đo khoảng cách chuyển đổi phân phối liên tục). Chứng minh phân phối dữ liệu sinh ra không bị biến dạng, giữ nguyên Correlation (tương quan các cột).
+• Privacy (Bảo vệ riêng tư): Tính DCR (Distance to Closest Record - khoảng cách đến bản ghi thật gần nhất) và NNDR (tỷ lệ khoảng cách giữa điểm gần nhất và gần thứ hai). Xác định tỷ lệ Leakage Rate (phân vị thứ 5 holdout-to-train). Đo MIA AUC-ROC để chứng minh không bị rò rỉ danh tính. (AUC ~ 0.5 là tuyệt đối an toàn vì tương đương như tung đồng xu ngẫu nhiên).
+• Utility (Tính ứng dụng thực tiễn - TSTR): Dùng chiến lược Train Synthetic, Test Real (Huấn luyện ML trên giả, test trên thật). Tích hợp StandardScaler vào bộ đánh giá để loại bỏ trạng thái Hessian ill-conditioned (ma trận đạo hàm bậc 2 xấu do chênh lệch thang đo đặc trưng làm thuật toán ML không thể hội tụ). Nếu TSTR F1 tiệm cận TRTR (Train Real, Test Real), dự án thành công rực rỡ, sẵn sàng bàn giao thương mại.
+
+IX. PHỤ LỤC: BẢNG GIẢI NGHĨA THUẬT NGỮ CHUYÊN NGÀNH (GLOSSARY)
+
+Để hỗ trợ quá trình vấn đáp hội đồng, dưới đây là giải nghĩa chi tiết các khái niệm học máy nền tảng được sử dụng trong kiến trúc:
+
+1. Các khái niệm cơ bản về Huấn luyện AI
+• Trình tối ưu hóa (Optimizer): Thuật toán toán học (ví dụ AdamW) có nhiệm vụ cập nhật các trọng số (tham số) của mạng Neural sau mỗi vòng lặp (epoch) dựa trên đạo hàm, nhằm tìm ra điểm cực tiểu của sai số.
+• Hàm mất mát (Loss Function): Thước đo định lượng sự chênh lệch giữa dự đoán của trí tuệ nhân tạo và thực tế. Quá trình "học" chính là quá trình điều chỉnh tham số để tối thiểu hóa hàm này.
+
+2. Các kiến trúc sinh học sâu (Deep Generative Architectures)
+• GAN (Generative Adversarial Network - Mạng đối kháng sinh): Bao gồm 2 mạng Neural đấu trí với nhau. Generator (Kẻ làm giả) cố gắng sinh dữ liệu lừa Discriminator (Cảnh sát), và Discriminator học cách phân biệt thật/giả. Khi đạt cân bằng Nash, dữ liệu giả sẽ không thể phân biệt được với dữ liệu thật.
+• VAE (Variational Autoencoder - Bộ tự mã hóa biến thiên): Nén dữ liệu thô vào một không gian ẩn (Latent space) dưới dạng các phân phối xác suất (thay vì các vector cố định), sau đó lấy mẫu ngẫu nhiên từ không gian này để giải nén (decode) ra dữ liệu hoàn toàn mới.
+• Diffusion Model (Mô hình khuếch tán): Kiến trúc State-of-the-art. Quá trình thuận: Từ từ tiêm nhiễu Gauss vào dữ liệu thật cho đến khi biến thành nhiễu trắng hoàn toàn. Quá trình ngược: Huấn luyện mạng Neural học cách "khử nhiễu" (denoise) dần dần để tạo ra bản ghi dữ liệu mới từ một ma trận nhiễu ngẫu nhiên ban đầu.
+
+3. Các hàm mất mát chuyên biệt (Specialized Loss Functions)
+• WGAN-GP Loss (Wasserstein GAN với Gradient Penalty): Bản nâng cấp của GAN, sử dụng khoảng cách Wasserstein (khoảng cách chuyển đất) để đo lường chênh lệch phân phối thay vì xác suất tuyệt đối. Kết hợp phạt đạo hàm (Gradient Penalty) để giúp mô hình hội tụ cực kỳ ổn định, chống lại lỗi sụp đổ mode.
+• ELBO Loss (Evidence Lower Bound): Hàm mất mát cốt lõi của VAE. Đóng vai trò cân bằng giữa hai mục tiêu: (1) Giảm sai số tái tạo (Reconstruction Error) để dữ liệu sinh ra giống bản gốc, và (2) Ép không gian ẩn tuân theo phân phối chuẩn thông qua đo lường Kullback-Leibler Divergence.
+• MSE Loss với Cosine Schedule (Mean Squared Error): Trung bình bình phương sai số, được dùng trong Diffusion để đo khoảng cách giữa lượng nhiễu mà mạng Neural dự báo so với lượng nhiễu thực tế. Cosine Schedule giúp điều phối tốc độ tiêm nhiễu theo đường cong Cosine thay vì đường thẳng, giúp mô hình học tốt hơn ở các bước nhiễu trung bình.
+
+4. Các chỉ số đánh giá (Evaluation Metrics)
+• Accuracy (Độ chính xác): Tỷ lệ đoán đúng trên tổng số bản ghi. Chỉ số này rất dễ bị "ảo giác" nếu dữ liệu mất cân bằng (ví dụ 99% khách hàng bình thường, 1% lừa đảo; mô hình luôn đoán bình thường thì Accuracy vẫn 99% dù mô hình vô dụng).
+• F1-Score và F1-Macro: Trung bình điều hòa giữa Precision (Độ chuẩn xác) và Recall (Độ phủ). F1-Macro tính toán F1 độc lập cho từng lớp (class) rồi lấy trung bình cộng. Đây là thước đo công bằng, khắt khe và chính xác nhất để đánh giá mô hình học máy trên các tập dữ liệu mất cân bằng nghiêm trọng (imbalanced data).
+• AUC-ROC (Area Under the ROC Curve): Đo lường khả năng phân loại của mô hình ở mọi ngưỡng cắt (threshold). Trong bài toán tấn công MIA, AUC = 0.5 tương đương khả năng đoán mò như tung đồng xu (chứng tỏ mô hình an toàn tuyệt đối, kẻ tấn công không thể phân biệt), trong khi AUC = 1.0 là khả năng phân biệt hoàn hảo (chứng tỏ mô hình đã ghi nhớ dữ liệu thật và bị rò rỉ quyền riêng tư).
+
+5. Các chỉ số bảo mật và độ trung thực (Privacy & Fidelity Metrics)
+• DCR (Distance to Closest Record): Khoảng cách từ một bản ghi dữ liệu giả đến bản ghi dữ liệu thật gần nhất trong không gian Euclid. Nếu DCR quá nhỏ, mô hình AI đang học vẹt (ghi nhớ - memorize) chính xác hồ sơ thật, dẫn đến nguy cơ tái định danh cao.
+• NNDR (Nearest Neighbor Distance Ratio): Tỷ lệ khoảng cách giữa điểm thật gần nhất và điểm thật gần thứ hai. Chỉ số này kiểm tra xem dữ liệu giả có xu hướng bám sát một cá nhân cụ thể (NNDR nhỏ) hay phân bố đều trên một vùng không gian an toàn.
+• JSD (Jensen-Shannon Divergence): Thước đo sự khác biệt giữa hai phân phối xác suất rời rạc. Được dùng để chứng minh dữ liệu phân loại (Categorical) sinh ra có cùng tỷ lệ thống kê với dữ liệu gốc.
+• Wasserstein Distance (Earth Mover's Distance): Đo lường chi phí tối thiểu để biến đổi phân phối liên tục giả thành phân phối thật. Giúp đánh giá xem biểu đồ phân phối của dữ liệu số có bị biến dạng hay mất đỉnh (oversmoothing) hay không.
+• TSTR và TRTR (Train Synthetic, Test Real / Train Real, Test Real): Giao thức kiểm định tính ứng dụng thực tế. Huấn luyện mô hình trên dữ liệu giả (TSTR) và mô hình trên dữ liệu thật (TRTR), sau đó cả hai đều được test trên cùng một tập Test thật cô lập (Ground Truth) để so sánh chênh lệch hiệu năng.
+
+6. Các kỹ thuật bảo vệ và ổn định (Protection & Stabilization Techniques)
+• DP-SGD (Differentially Private Stochastic Gradient Descent): Thuật toán huấn luyện bảo mật vi sai. Bằng cách kẹp đạo hàm (clipping) giới hạn sự đóng góp của một mẫu cá nhân, và tiêm nhiễu Gauss (Noise addition) làm mờ dấu vết, thuật toán cung cấp chứng minh toán học chống lại tấn công MIA.
+• MIA (Membership Inference Attack): Tấn công suy luận thành viên. Giả lập một kẻ tấn công cố gắng đoán xem hồ sơ của bệnh nhân/khách hàng A có nằm trong tập huấn luyện của AI hay không. Nếu bị phát hiện, tức là vi phạm dữ liệu cá nhân.
+• Layer Normalization vs Batch Normalization: Kỹ thuật chuẩn hóa phân phối bên trong mạng Neural. BatchNorm tính trung bình trên cả một lô dữ liệu, làm rò rỉ thông tin cá nhân của người này sang người khác. LayerNorm cô lập việc chuẩn hóa trên từng hồ sơ riêng biệt, tương thích hoàn hảo với yêu cầu bảo mật.
