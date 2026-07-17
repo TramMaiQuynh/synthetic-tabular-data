@@ -42,7 +42,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-PYTHON = os.path.join(".venv", "Scripts", "python")
+PYTHON = sys.executable
 
 # ---------------------------------------------------------------------------
 # Experiment definition
@@ -197,6 +197,9 @@ def _fmt(val: float, decimals: int = 4) -> str:
 
 
 def _save_csv(experiments: List[Experiment], out_path: str) -> None:
+    if not experiments:
+        logger.warning("No experiment results to save.")
+        return
     os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
     rows = []
     for e in experiments:
@@ -301,8 +304,7 @@ def main() -> None:
         except FileNotFoundError:
             logger.error(
                 "Python interpreter not found at '%s'.\n"
-                "Please activate the virtual environment first:\n"
-                "    .venv\\Scripts\\activate",
+                "Please check Python installation and path settings.",
                 PYTHON
             )
             exp.status = "ERROR"
