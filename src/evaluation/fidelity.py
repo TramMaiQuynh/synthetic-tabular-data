@@ -15,7 +15,7 @@ import numpy as np
 import pandas as pd
 import scipy.stats as ss
 from scipy.spatial.distance import jensenshannon
-from typing import List, Dict, Tuple, Optional, Any
+from typing import List, Dict, Any
 
 logger = logging.getLogger(__name__)
 
@@ -40,8 +40,12 @@ def compute_wasserstein_distance(real_series: pd.Series, synth_series: pd.Series
     r_min, r_max = r_vals.min(), r_vals.max()
     denom = r_max - r_min
     if denom == 0:
-        # Constant column — distance is 0 if synth is also constant at same value
-        return 0.0
+        # Constant column: distance is the absolute difference between the
+        # constant values (normalized to [0,1] by treating the constant as
+        # the only value). If both are the same constant, distance is 0.
+        s_const = s_vals[0] if len(s_vals) > 0 else 0.0
+        r_const = r_vals[0] if len(r_vals) > 0 else 0.0
+        return float(abs(s_const - r_const))
     r_normed = (r_vals - r_min) / denom
     s_normed = (s_vals - r_min) / denom  # Use real range to normalize synthetic
     return float(ss.wasserstein_distance(r_normed, s_normed))
