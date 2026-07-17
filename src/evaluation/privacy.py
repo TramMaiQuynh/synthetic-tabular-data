@@ -69,11 +69,13 @@ class PrivacyAuditor:
         categorical_cols: List[str],
         sensitive_col: Optional[str] = None,
         max_samples: int = 5000,
+        random_state: int = 42,
     ) -> None:
         self.continuous_cols = continuous_cols
         self.categorical_cols = categorical_cols
         self.sensitive_col = sensitive_col
         self.max_samples = max_samples
+        self.random_state = random_state
         
     def evaluate(
         self,
@@ -104,7 +106,7 @@ class PrivacyAuditor:
         synth_num = pipeline_loader_fn(synth_df)
         
         # 2. Geometric Metrics (DCR and NNDR) using real_train as reference
-        dcr, nndr = compute_dcr_nndr(real_train_num, synth_num, self.max_samples)
+        dcr, nndr = compute_dcr_nndr(real_train_num, synth_num, self.max_samples, self.random_state)
         
         results["dcr_vals"] = dcr
         results["nndr_vals"] = nndr
@@ -116,7 +118,7 @@ class PrivacyAuditor:
         # H-3 fix: Use 5th-percentile based leakage detection instead of hard-coded 0.01.
         # Records whose DCR falls below the 5th percentile of the holdout-to-train
         # DCR distribution are considered suspiciously close (potential memorization).
-        holdout_dcr, _ = compute_dcr_nndr(real_train_num, real_test_num, self.max_samples)
+        holdout_dcr, _ = compute_dcr_nndr(real_train_num, real_test_num, self.max_samples, self.random_state)
         leakage_threshold = float(np.percentile(holdout_dcr, 5)) if len(holdout_dcr) > 0 else 0.01
         # Ensure threshold is at least a small epsilon to avoid division issues
         leakage_threshold = max(leakage_threshold, 1e-8)
@@ -168,8 +170,8 @@ class PrivacyAuditor:
             # Not enough data for meaningful evaluation
             return 0.5
         
-        # Subsample deterministically
-        rng = np.random.RandomState(42)
+        # Subsample using configured random_state for reproducibility
+        rng = np.random.RandomState(self.random_state)
         
         train_idx = rng.choice(n_train, min(n_train, max_eval), replace=False)
         test_idx = rng.choice(n_test, min(n_test, max_eval), replace=False)
