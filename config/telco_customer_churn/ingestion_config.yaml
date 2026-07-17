@@ -21,12 +21,9 @@ columns:
 - TotalCharges
 - Churn
 has_header: true
-pii_columns_to_drop:
-- customerID
 quasi_identifiers:
 - gender
 - SeniorCitizen
 - Partner
 - Dependents
 separator: ','
-target_column: Churn
