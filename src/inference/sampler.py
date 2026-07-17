@@ -262,12 +262,29 @@ class SyntheticSampler:
                 # on it to handle inverse_transform correctly.
                 if self._pipeline is not None:
                     enc = self._pipeline.encoder
-                    if enc is not None and meta.name in enc.onehot_cols_:
+                    if enc is None:
+                        raise RuntimeError(
+                            f"Pipeline loaded but encoder is None. Cannot reconstruct "
+                            f"onehot column names for '{meta.name}'. "
+                            f"Ensure the pipeline artifact was saved after fit_transform."
+                        )
+                    if meta.name in enc.onehot_cols_:
                         oh_names = enc.onehot_cols_[meta.name]
                         columns.extend(oh_names[:meta.dim])
                         offset += meta.dim
                         continue
+                    else:
+                        logger.warning(
+                            "Column '%s' declared as onehot in col_meta but not found "
+                            "in encoder.onehot_cols_. This may indicate a schema mismatch "
+                            "between training and sampling.", meta.name,
+                        )
                 # Fallback: positional names
+                logger.warning(
+                    "Using positional fallback names for onehot column '%s'. "
+                    "inverse_transform will FAIL to decode these columns correctly.",
+                    meta.name,
+                )
                 for i in range(meta.dim):
                     columns.append(f"{meta.name}__oh_{i}")
                 offset += meta.dim
