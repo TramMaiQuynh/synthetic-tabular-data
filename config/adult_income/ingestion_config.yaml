@@ -17,7 +17,6 @@ columns:
 has_header: false
 na_values:
 - '?'
-pii_columns_to_drop: []
 quasi_identifiers:
 - age
 - workclass
@@ -27,4 +26,3 @@ quasi_identifiers:
 - sex
 - native-country
 separator: ',\s*'
-target_column: income
