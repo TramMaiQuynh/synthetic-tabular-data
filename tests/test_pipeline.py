@@ -34,8 +34,8 @@ def test_pipeline_fit_transform_and_artifacts():
         "income": ["<=50K", ">50K", "<=50K"]
     })
     
-    # Run fit_transform
-    transformed_df = pipeline.fit_transform(df)
+    # Run fit_transform with diffusion model type to target [0, 1] scaling range
+    transformed_df = pipeline.fit_transform(df, model_type="diffusion")
     
     # Check that output contains no NaNs
     assert not transformed_df.isnull().any().any()
@@ -76,3 +76,29 @@ def test_pipeline_fit_transform_and_artifacts():
     # Check original shapes and columns are matching (except indicators and PII)
     # The columns should be in the same order as in df (or at least match the set of columns)
     assert set(restored_df.columns) == set(df.columns)
+
+
+def test_pipeline_fit_transform_ctgan():
+    pipeline = PreprocessingPipeline("adult_income")
+    df = pd.DataFrame({
+        "age": [25.0, 35.0, 45.0],
+        "capital-gain": [0.0, 1000.0, 500.0],
+        "capital-loss": [0.0, 0.0, 0.0],
+        "education-num": [10.0, 12.0, 14.0],
+        "fnlwgt": [123456.0, 234567.0, 345678.0],
+        "hours-per-week": [40.0, 45.0, 35.0],
+        "education": ["Bachelors", "Masters", "HS-grad"],
+        "marital-status": ["Never-married", "Married-civ-spouse", "Divorced"],
+        "native-country": ["United-States", "Cuba", "Jamaica"],
+        "occupation": ["Adm-clerical", "Exec-managerial", "Sales"],
+        "race": ["White", "Black", "White"],
+        "relationship": ["Not-in-family", "Husband", "Wife"],
+        "sex": ["Male", "Female", "Male"],
+        "workclass": ["Private", "Private", "Self-emp"],
+        "income": ["<=50K", ">50K", "<=50K"]
+    })
+    transformed_df = pipeline.fit_transform(df, model_type="ctgan")
+    for col in pipeline.continuous_cols:
+        if col in transformed_df.columns:
+            assert transformed_df[col].min() >= -1.0
+            assert transformed_df[col].max() <= 1.0
