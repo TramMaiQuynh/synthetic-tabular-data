@@ -1,7 +1,7 @@
 """
 Configuration Loader
 --------------------
-Enterprise-grade config loader using Pydantic for strict schema validation.
+Config loader using Pydantic for strict schema validation.
 Merges default_config.yaml with dataset-specific configurations.
 """
 
@@ -9,16 +9,16 @@ import os
 import logging
 import yaml
 from pydantic import BaseModel, Field, conint, confloat, ValidationError
-from typing import List, Dict, Any, Optional
+from typing import List, Optional
 
 logger = logging.getLogger(__name__)
 
 class IngestionConfig(BaseModel):
     model_config = {"extra": "forbid"}
-    columns: List[str]
+    columns: List[str] = Field(default_factory=list)
     pii_columns_to_drop: List[str] = Field(default_factory=list)
     quasi_identifiers: List[str] = Field(default_factory=list)
-    target_column: str
+    target_column: str = ""
     separator: str = ","
     has_header: bool = True
     na_values: Optional[List[str]] = None
