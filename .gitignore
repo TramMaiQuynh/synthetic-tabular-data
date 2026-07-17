@@ -36,3 +36,9 @@ data/*
 # Ignore dynamic pre-processing/training artifacts
 artifacts/
 
+# Ignore local docs and presentation files untracked on GitHub
+docs/
+presentation.txt
+scientific_methodology.md
+
+
