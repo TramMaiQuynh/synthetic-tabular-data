@@ -11,7 +11,7 @@ Provides inverse_transform to reconstruct categorical strings from numeric outpu
 import logging
 import pandas as pd
 import numpy as np
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Optional
 
 __all__ = ["TabularEncoder"]
 
@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 VALID_HANDLE_UNKNOWN = {"ignore", "error"}
 
 class TabularEncoder:
-    def __init__(self, max_onehot_cardinality: int = 10, handle_unknown: str = "ignore", scale_labels: bool = False):
+    def __init__(self, max_onehot_cardinality: int = 10, handle_unknown: str = "ignore", scale_labels: bool = False, column_strategies: Optional[Dict[str, str]] = None):
         """
         Initialize the TabularEncoder.
         
@@ -29,6 +29,7 @@ class TabularEncoder:
                                     Above this, Label Encoding is used.
             handle_unknown: Strategy for handling unseen categories ('ignore' or 'error').
             scale_labels: Whether to scale label-encoded column values to [0, 1].
+            column_strategies: Optional mapping of column names to specific encoding strategies ('onehot' or 'label').
         
         Raises:
             ValueError: If handle_unknown is not one of the supported values.
@@ -41,6 +42,14 @@ class TabularEncoder:
         self.max_onehot_cardinality = max_onehot_cardinality
         self.handle_unknown = handle_unknown
         self.scale_labels = scale_labels
+        self.column_strategies = column_strategies or {}
+        
+        for col, strat in self.column_strategies.items():
+            if strat not in {"onehot", "label"}:
+                raise ValueError(
+                    f"Invalid encoding strategy '{strat}' for column '{col}'. "
+                    f"Must be 'onehot' or 'label'."
+                )
         
         # Fitted states
         self.categorical_cols_: List[str] = []
@@ -80,12 +89,18 @@ class TabularEncoder:
             
             # Determine encoding type
             cardinality = len(unique_vals)
-            if cardinality <= self.max_onehot_cardinality:
+            col_strat = self.column_strategies.get(col)
+            if col_strat is not None:
+                self.encoding_types_[col] = col_strat
+            elif cardinality <= self.max_onehot_cardinality:
                 self.encoding_types_[col] = "onehot"
+            else:
+                self.encoding_types_[col] = "label"
+                
+            if self.encoding_types_[col] == "onehot":
                 # Store expected one-hot column names
                 self.onehot_cols_[col] = [f"{col}_{val}" for val in unique_vals]
             else:
-                self.encoding_types_[col] = "label"
                 # Build label mapping dictionary
                 # If handle_unknown is 'ignore', append an 'Unknown' category to the end
                 cats = list(unique_vals)
