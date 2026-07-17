@@ -119,3 +119,22 @@ class ConfigLoader:
             logger.error("Config validation failed for dataset '%s':", dataset_name)
             logger.error(e)
             raise e
+
+    @staticmethod
+    def load_pipeline_config(dataset_name: str) -> dict:
+        """
+        Loads pipeline_config.yaml for the given dataset.
+        
+        Args:
+            dataset_name: Name of the dataset folder under configs/
+            
+        Returns:
+            dict: The loaded pipeline configuration dictionary or empty dict if not found.
+        """
+        configs_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "config"))
+        pipeline_path = os.path.join(configs_dir, dataset_name, "pipeline_config.yaml")
+        if not os.path.exists(pipeline_path):
+            return {}
+            
+        with open(pipeline_path, "r", encoding="utf-8") as f:
+            return yaml.safe_load(f) or {}
