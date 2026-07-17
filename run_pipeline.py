@@ -134,7 +134,9 @@ def main():
     df_no_pii = df_raw.drop(columns=pii_cols_present)
 
     # Attempt stratified split when the target column is categorical
-    target_col_name = config.ingestion.target_column
+    # Read target_column from data_schema.yaml (Single Source of Truth)
+    schema = ConfigLoader.load_schema(dataset_name)
+    target_col_name = schema.get("target_column", "")
     stratify_series = None
     if target_col_name and target_col_name in df_no_pii.columns:
         col = df_no_pii[target_col_name]
@@ -209,7 +211,7 @@ def main():
     print("\n[4] Running Evaluation Suite & Generating Reports...")
     suite = EvaluationSuite(dataset_name=dataset_name, artifacts_root=artifacts_root)
 
-    target_col = config.ingestion.target_column
+    target_col = ConfigLoader.load_schema(dataset_name).get("target_column", "")
     sensitive_col = config.ingestion.quasi_identifiers[0] if config.ingestion.quasi_identifiers else ""
 
     # Wrap the already-fitted Stage-2 pipeline as the numeric loader for
