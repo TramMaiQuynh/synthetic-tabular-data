@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
 import numpy as np
-from typing import List, Dict, Any, Optional
+from typing import List
 
 logger = logging.getLogger(__name__)
 
@@ -99,9 +99,11 @@ class VisualOverlayGenerator:
                         
                     freq_df.plot(kind="bar", ax=ax, color=["blue", "red"], alpha=0.6, rot=30)
                     ax.set_ylabel("Density")
-                    # Wrap labels
+                    # Wrap labels — set both ticks and labels to avoid deprecation warning
+                    current_ticks = ax.get_xticks()
+                    ax.set_xticks(current_ticks)
                     labels = [label.get_text()[:10] for label in ax.get_xticklabels()]
-                    ax.set_xticklabels(labels, ha="right")
+                    ax.set_xticklabels(labels, ha="right", rotation=30)
                     ax.legend()
                     
             # Hide any unused subplots
@@ -159,7 +161,9 @@ class VisualOverlayGenerator:
             axes[2].set_title("Absolute Correlation Difference")
             
             for ax in axes:
-                # Wrap tick labels
+                # Wrap tick labels — set ticks explicitly before labels to avoid deprecation
+                ax.set_xticks(ax.get_xticks())
+                ax.set_yticks(ax.get_yticks())
                 ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha="right", fontsize=9)
                 ax.set_yticklabels(ax.get_yticklabels(), rotation=0, fontsize=9)
                 
