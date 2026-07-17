@@ -71,6 +71,6 @@ continuous_features:
     min: 18.25
     max: 118.75
   TotalCharges:
-    min: 18.8
+    min: 0.0
     max: 8684.8
 target_column: Churn
