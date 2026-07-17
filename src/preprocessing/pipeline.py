@@ -9,12 +9,10 @@ Supports memory-based chunk size calculation and outputs artifacts to artifacts/
 import os
 import hashlib
 import logging
-import yaml
 import joblib
 import pandas as pd
-import numpy as np
-from typing import List, Dict, Any, Optional, Union, Generator
-from src.config.config_loader import ConfigLoader, AppConfig
+from typing import Dict, Optional
+from src.config.config_loader import ConfigLoader
 
 __all__ = ["PreprocessingPipeline"]
 
@@ -31,17 +29,22 @@ class PreprocessingPipeline:
         self.dataset_name = dataset_name
         self.config = ConfigLoader.load_config(dataset_name)
         
+        # Load pipeline config
+        self.pipeline_config = ConfigLoader.load_pipeline_config(dataset_name)
+        
         # Load data schema
         self.schema = self._load_schema()
         
-        # Extract features from schema
-        self.pii_columns = self.schema.get("PII_columns_to_drop", [])
-        self.categorical_cols = list(self.schema.get("categorical_features", {}).keys())
-        self.continuous_cols = list(self.schema.get("continuous_features", {}).keys())
+        # Extract features from schema and pipeline config
+        self.pii_columns = list(set(self.schema.get("PII_columns_to_drop", []) + self.pipeline_config.get("columns_to_drop", [])))
+        
+        dropped_set = set(self.pii_columns)
+        self.categorical_cols = [c for c in self.schema.get("categorical_features", {}).keys() if c not in dropped_set]
+        self.continuous_cols = [c for c in self.schema.get("continuous_features", {}).keys() if c not in dropped_set]
         self.target_col = self.schema.get("target_column", "")
         
         # If target column is categorical, ensure it is in categorical list
-        if self.target_col and self.target_col not in self.categorical_cols and self.target_col not in self.continuous_cols:
+        if self.target_col and self.target_col not in self.categorical_cols and self.target_col not in self.continuous_cols and self.target_col not in dropped_set:
             # Let's inspect the target column. Usually, it's categorical or continuous.
             # We assume it is treated as categorical by default unless listed in continuous.
             self.categorical_cols.append(self.target_col)
@@ -77,15 +80,21 @@ class PreprocessingPipeline:
         if ext == '.parquet':
             import pyarrow.parquet as pq
             parquet_file = pq.ParquetFile(file_path)
-            first_batch = next(parquet_file.iter_batches(batch_size=1000))
-            sample_df = first_batch.to_pandas()
+            try:
+                first_batch = next(parquet_file.iter_batches(batch_size=1000))
+                sample_df = first_batch.to_pandas()
+            except StopIteration:
+                sample_df = pd.DataFrame()
         elif ext in ['.xls', '.xlsx']:
             sample_df = pd.read_excel(file_path, nrows=1000)
         else:  # default to CSV
             # Respect ingestion configuration parameters
             read_kwargs = {"nrows": 1000}
             if hasattr(self.config, "ingestion"):
-                read_kwargs["sep"] = getattr(self.config.ingestion, "separator", ",")
+                sep = getattr(self.config.ingestion, "separator", ",")
+                read_kwargs["sep"] = sep
+                if len(sep) > 1:
+                    read_kwargs["engine"] = "python"
                 if hasattr(self.config.ingestion, "has_header") and not self.config.ingestion.has_header:
                     read_kwargs["header"] = None
                     if hasattr(self.config.ingestion, "columns") and self.config.ingestion.columns:
@@ -124,17 +133,16 @@ class PreprocessingPipeline:
         file_size_bytes = os.path.getsize(file_path)
         max_ram_bytes = self.config.model.max_ram_gb * 1e9
         
-        # If file on disk is very large (e.g. > 20% of max_ram_bytes), load first chunk or notify
-        # In this task, we will return the complete DataFrame but process in chunks if it exceeds RAM
-        # For simplicity, if file is small, we load it directly.
-        # Otherwise, we warn or return the first chunk or processed chunks combined.
         _, ext = os.path.splitext(file_path.lower())
         
         # Prepare read options for CSV/Text files
         read_kwargs = {}
         if ext not in ['.parquet', '.xls', '.xlsx']:
             if hasattr(self.config, "ingestion"):
-                read_kwargs["sep"] = getattr(self.config.ingestion, "separator", ",")
+                sep = getattr(self.config.ingestion, "separator", ",")
+                read_kwargs["sep"] = sep
+                if len(sep) > 1:
+                    read_kwargs["engine"] = "python"
                 if hasattr(self.config.ingestion, "has_header") and not self.config.ingestion.has_header:
                     read_kwargs["header"] = None
                     if hasattr(self.config.ingestion, "columns") and self.config.ingestion.columns:
@@ -146,18 +154,18 @@ class PreprocessingPipeline:
             logger.info("File size is large (%.1f MB). Reading in chunks of %d rows.", file_size_bytes / 1e6, chunk_rows)
             chunks = []
             if ext == '.parquet':
-                # Pandas read_parquet doesn't support chunksize directly, we can read using pyarrow
                 import pyarrow.parquet as pq
                 parquet_file = pq.ParquetFile(file_path)
                 for batch in parquet_file.iter_batches(batch_size=chunk_rows):
                     chunks.append(batch.to_pandas())
             elif ext in ['.xls', '.xlsx']:
-                # Excel is inherently memory intensive and hard to chunk, read directly
                 return pd.read_excel(file_path)
             else:
                 read_kwargs["chunksize"] = chunk_rows
                 for chunk in pd.read_csv(file_path, **read_kwargs):
                     chunks.append(chunk)
+            if not chunks:
+                return pd.DataFrame()
             return pd.concat(chunks, ignore_index=True)
         else:
             if ext == '.parquet':
@@ -167,7 +175,7 @@ class PreprocessingPipeline:
             else:
                 return pd.read_csv(file_path, **read_kwargs)
 
-    def fit_transform(self, df: pd.DataFrame) -> pd.DataFrame:
+    def fit_transform(self, df: pd.DataFrame, model_type: Optional[str] = None) -> pd.DataFrame:
         """
         Execute full preprocessing: PII removal -> Imputer -> Encoder -> Scaler.
 
@@ -195,29 +203,50 @@ class PreprocessingPipeline:
             if existing_pii:
                 res_df = res_df.drop(columns=existing_pii)
 
-        # 3. Initialize sub-modules
-        self.imputer = TabularImputer(numeric_strategy="median", categorical_strategy="mode")
+        # 3. Determine global feature range based on model_type
+        resolved_model_type = model_type or self.config.model.model_type
+        if resolved_model_type.lower() in ["ctgan", "ctvae"]:
+            global_feature_range = (-1.0, 1.0)
+        else:
+            global_feature_range = (0.0, 1.0)
+
+        # Map scaling strategies to options for TabularScaler
+        scaling_opts = {}
+        for col, strat in self.pipeline_config.get("scaling_strategy", {}).items():
+            scaling_opts[col] = {"strategy": strat}
+
+        # 4. Initialize sub-modules with column strategies
+        self.imputer = TabularImputer(
+            numeric_strategy="median",
+            categorical_strategy="mode",
+            column_strategies=self.pipeline_config.get("imputation_strategy", {})
+        )
         self.encoder = TabularEncoder(
             max_onehot_cardinality=self.config.ingestion.max_onehot_cardinality,
             handle_unknown="ignore",
-            scale_labels=True
+            scale_labels=True,
+            column_strategies=self.pipeline_config.get("encoding_strategy", {})
         )
-        self.scaler = TabularScaler(strategy="minmax")
+        self.scaler = TabularScaler(
+            strategy="minmax",
+            feature_range=global_feature_range,
+            column_strategies=scaling_opts
+        )
 
         # Adjust lists of features based on what remains in the dataframe
         current_cols = set(res_df.columns)
         active_continuous = [c for c in self.continuous_cols if c in current_cols]
         active_categorical = [c for c in self.categorical_cols if c in current_cols]
 
-        # 4. Missing Value Imputation
+        # 5. Missing Value Imputation
         self.imputer.fit(res_df, active_continuous, active_categorical)
         res_df = self.imputer.transform(res_df)
 
-        # 5. Categorical Encoding
+        # 6. Categorical Encoding
         self.encoder.fit(res_df, active_categorical)
         res_df = self.encoder.transform(res_df)
 
-        # 6. Scale continuous columns only (not one-hot / label / missing indicators)
+        # 7. Scale continuous columns only (not one-hot / label / missing indicators)
         self.scaler.fit(res_df, active_continuous)
         res_df = self.scaler.transform(res_df)
 
