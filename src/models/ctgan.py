@@ -221,7 +221,22 @@ class _ConditionalSampler:
     def sample(self, batch_size: int, device: torch.device) -> torch.Tensor:
         """
         Returns a (batch_size, cond_dim) one-hot conditional tensor.
-        Each row selects a random column and a random category.
+        Implements the training-by-sampling strategy from Xu et al. (2019):
+          1. Uniformly select a categorical column for each row.
+          2. Uniformly select a category within that column.
+          
+        NOTE: The original CTGAN paper samples categories proportional to
+        log-frequency to oversample rare categories. This implementation
+        currently uses uniform category sampling because category frequency
+        information is not available at the model level (it requires raw
+        data counts from the training set). This is a known limitation —
+        the impact is reduced effectiveness in handling class imbalance
+        for high-cardinality categorical columns.
+        
+        Both `torch.randint` calls use PyTorch's seeded global RNG
+        (set by `set_global_seed()` in the trainer), ensuring:
+          - Different random sequences across calls (correct training dynamics)
+          - Full reproducibility across runs with the same seed
         """
         cond = torch.zeros(batch_size, self.cond_dim, device=device)
         if self._n_cols == 0:
