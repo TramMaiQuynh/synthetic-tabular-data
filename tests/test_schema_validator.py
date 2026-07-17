@@ -1,6 +1,5 @@
 import pytest
 import pandas as pd
-import numpy as np
 from src.validators.schema_validator import SchemaValidator
 
 def test_validator_input_fail_fast():
@@ -90,8 +89,9 @@ def test_validator_output_audit_and_correct():
     assert corrected_df.loc[0, "capital-gain"] == 0.0
     assert corrected_df.loc[2, "capital-gain"] == 99999.0
     
-    # Verify invalid category was corrected to fallback (the first class, Bachelors)
-    assert corrected_df.loc[2, "education"] == "Bachelors"
+    # Verify invalid category was corrected to fallback (the first class in schema)
+    expected_fallback = validator.schema["categorical_features"]["education"][0]
+    assert corrected_df.loc[2, "education"] == expected_fallback
     
     # Verify audited corrected df is now valid
     new_report = validator.audit_output(corrected_df)
