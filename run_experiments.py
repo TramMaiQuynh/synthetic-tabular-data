@@ -173,9 +173,10 @@ def _parse_results(exp: Experiment) -> None:
 
     # TSTR/TRTR rows: each classifier is a SINGLE markdown table line
     # Do NOT use re.DOTALL — it would cross-match between different classifier rows
-    rf_m  = re.search(r"RandomForest.*?F1-Macro:\s*([\d.]+).*?F1-Macro:\s*([\d.]+)", content)
-    gb_m  = re.search(r"GradientBoosting.*?F1-Macro:\s*([\d.]+).*?F1-Macro:\s*([\d.]+)", content)
-    lr_m  = re.search(r"LogisticRegression.*?F1-Macro:\s*([\d.]+).*?F1-Macro:\s*([\d.]+)", content)
+    # Support both F1-Macro (classification) and R2-Score (regression) metric names
+    rf_m  = re.search(r"RandomForest.*?(?:F1-Macro|R2-Score):\s*([\d.]+).*?(?:F1-Macro|R2-Score):\s*([\d.]+)", content)
+    gb_m  = re.search(r"GradientBoosting.*?(?:F1-Macro|R2-Score):\s*([\d.]+).*?(?:F1-Macro|R2-Score):\s*([\d.]+)", content)
+    lr_m  = re.search(r"LogisticRegression.*?(?:F1-Macro|R2-Score):\s*([\d.]+).*?(?:F1-Macro|R2-Score):\s*([\d.]+)", content)
 
     if rf_m:
         exp.trtr_rf_f1, exp.tstr_rf_f1 = float(rf_m.group(1)), float(rf_m.group(2))
