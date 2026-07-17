@@ -7,12 +7,9 @@ Schema Validator
    data complies with min/max bounds and category sets, correcting/clamping values if necessary.
 """
 
-import os
 import logging
-import yaml
 import pandas as pd
-import numpy as np
-from typing import List, Dict, Any, Tuple
+from typing import Dict, Any, Tuple
 from src.config.config_loader import ConfigLoader
 
 __all__ = ["SchemaValidator"]
@@ -116,6 +113,10 @@ class SchemaValidator:
             min_val = bounds.get("min")
             max_val = bounds.get("max")
             
+            # Skip if bounds are not defined in schema (cannot validate)
+            if min_val is None or max_val is None:
+                continue
+                
             series = df[col].dropna()
             if len(series) == 0:
                 continue
