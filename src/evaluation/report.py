@@ -11,7 +11,7 @@ import html
 import datetime
 import logging
 import numpy as np
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -83,12 +83,40 @@ class ComplianceReporter:
         mia_auc = privacy.get("mia_auc", 0.5)
         
         # Determine status badges
+        # Compute ML utility status from actual model performance
+        utility_task = utility.get("task", "unknown")
+        utility_metrics = utility.get("metrics", {})
+        utility_status = "🟢 GOOD"
+        utility_desc = "Measures prediction capacity on synthetic training data."
+        if utility_metrics:
+            # Compute average utility drop (TRTR - TSTR)
+            drops = []
+            for model_name, score_dict in utility_metrics.items():
+                trtr = score_dict.get("TRTR", {})
+                tstr = score_dict.get("TSTR", {})
+                if utility_task == "classification":
+                    trtr_val = trtr.get("f1_macro", 0.0)
+                    tstr_val = tstr.get("f1_macro", 0.0)
+                else:
+                    trtr_val = trtr.get("r2", 0.0)
+                    tstr_val = tstr.get("r2", 0.0)
+                if trtr_val != 0.0:
+                    drops.append(trtr_val - tstr_val)
+            if drops:
+                avg_drop = sum(drops) / len(drops)
+                if avg_drop >= 0.15:
+                    utility_status = "🔴 LOW UTILITY"
+                elif avg_drop >= 0.05:
+                    utility_status = "🟡 ACCEPTABLE"
+                else:
+                    utility_status = "🟢 HIGH UTILITY"
+
         privacy_status = "🟢 SECURE" if dcr_leakage < 1.0 and mia_auc <= 0.65 else "🟡 WARNING"
         if dcr_leakage >= 5.0 or mia_auc >= 0.8:
             privacy_status = "🔴 LEAKAGE DETECTED"
             
-        fidelity_status = "🟢 HIGH FIDELITY" if avg_js < 0.05 and avg_corr_diff < 0.1 else "🟡 MEDIUM FIDELITY"
-        if avg_js >= 0.15:
+        fidelity_status = "🟢 HIGH FIDELITY" if avg_js < 0.05 and avg_wasserstein < 0.05 and avg_corr_diff < 0.1 else "🟡 MEDIUM FIDELITY"
+        if avg_js >= 0.15 or avg_wasserstein >= 0.15:
             fidelity_status = "🔴 LOW FIDELITY"
             
         lines.extend([
@@ -96,7 +124,7 @@ class ComplianceReporter:
             f"|---|---|---|---|",
             f"| **Privacy & Security** | DCR Leakage: {dcr_leakage:.2f}% <br> MIA AUC: {mia_auc:.2f} | {privacy_status} | Checks for record memorization & membership leakage. |",
             f"| **Statistical Fidelity** | Avg JSD: {avg_js:.4f} <br> Correlation Diff: {avg_corr_diff:.4f} | {fidelity_status} | Measures similarity of marginal and joint distributions. |",
-            f"| **Machine Learning Utility** | Task: {utility.get('task', 'unknown')} | 🟢 EVALUATED | Measures prediction capacity on synthetic training data. |",
+            f"| **Machine Learning Utility** | Task: {utility.get('task', 'unknown')} | {utility_status} | {utility_desc} |",
             "",
             "---",
             "",
@@ -234,6 +262,37 @@ class ComplianceReporter:
         avg_corr_diff = fidelity.get("correlation_difference", 0.0)
         mia_auc = privacy.get("mia_auc", 0.5)
         
+        # Compute ML utility status dynamically from actual model performance
+        utility_task = utility.get("task", "unknown")
+        utility_metrics = utility.get("metrics", {})
+        drops = []
+        if utility_metrics:
+            for model_name, score_dict in utility_metrics.items():
+                trtr = score_dict.get("TRTR", {})
+                tstr = score_dict.get("TSTR", {})
+                if utility_task == "classification":
+                    trtr_val = trtr.get("f1_macro", 0.0)
+                    tstr_val = tstr.get("f1_macro", 0.0)
+                else:
+                    trtr_val = trtr.get("r2", 0.0)
+                    tstr_val = tstr.get("r2", 0.0)
+                if trtr_val != 0.0:
+                    drops.append(trtr_val - tstr_val)
+        if drops:
+            avg_utility_drop = sum(drops) / len(drops)
+            if avg_utility_drop >= 0.15:
+                util_badge = "status-red"
+                util_label = "LOW UTILITY"
+            elif avg_utility_drop >= 0.05:
+                util_badge = "status-yellow"
+                util_label = "ACCEPTABLE"
+            else:
+                util_badge = "status-green"
+                util_label = "HIGH UTILITY"
+        else:
+            util_badge = "status-green"
+            util_label = "EVALUATED"
+
         # Compute status strings & colors
         if dcr_leakage < 1.0 and mia_auc <= 0.65:
             priv_badge = "status-green"
@@ -245,10 +304,11 @@ class ComplianceReporter:
             priv_badge = "status-yellow"
             priv_label = "WARNING"
             
-        if avg_js < 0.05 and avg_corr_diff < 0.1:
+        avg_wasserstein = np.mean(list(fidelity.get("wasserstein", {}).values())) if fidelity.get("wasserstein") else 0.0
+        if avg_js < 0.05 and avg_wasserstein < 0.05 and avg_corr_diff < 0.1:
             fid_badge = "status-green"
             fid_label = "HIGH FIDELITY"
-        elif avg_js >= 0.15:
+        elif avg_js >= 0.15 or avg_wasserstein >= 0.15:
             fid_badge = "status-red"
             fid_label = "LOW FIDELITY"
         else:
@@ -430,7 +490,7 @@ class ComplianceReporter:
                             Task: {html.escape(utility.get("task", "unknown").upper())} <br>
                             Target: {html.escape(target_col)}
                         </td>
-                        <td><span class="badge status-green">EVALUATED</span></td>
+                        <td><span class="badge {util_badge}">{util_label}</span></td>
                         <td>Ensures predicting on synthetic data produces models usable in real-world contexts.</td>
                     </tr>
                 </tbody>
