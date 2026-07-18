@@ -138,11 +138,14 @@ def _build_cmd(exp: Experiment) -> List[str]:
 
 def _parse_results(exp: Experiment) -> None:
     """Read the latest compliance report markdown to extract key metrics."""
+    dp_suffix = f"dp_eps{exp.epsilon}" if exp.enable_dp else "nodp"
+    run_name = f"{exp.model_type}_{dp_suffix}"
+    
     report_md = os.path.join(
-        "artifacts", exp.dataset, "evaluation", "compliance_report.md"
+        "artifacts", exp.dataset, run_name, "evaluation", "compliance_report.md"
     )
     report_html = os.path.join(
-        "artifacts", exp.dataset, "evaluation", "compliance_report.html"
+        "artifacts", exp.dataset, run_name, "evaluation", "compliance_report.html"
     )
     exp.report_html = os.path.abspath(report_html)
 
