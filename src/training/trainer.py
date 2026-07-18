@@ -198,6 +198,7 @@ class ModelTrainer:
         model_type: str,
         dataset_name: str,
         artifacts_root: str,
+        checkpoint_dir: Optional[str] = None,
     ) -> None:
         if model_type not in SUPPORTED_MODELS:
             raise ValueError(
@@ -207,6 +208,7 @@ class ModelTrainer:
         self.model_type = model_type
         self.dataset_name = dataset_name
         self.artifacts_root = artifacts_root
+        self.checkpoint_dir = checkpoint_dir
 
         self._model = None
         self._col_meta: List[ColumnMeta] = []
@@ -383,10 +385,13 @@ class ModelTrainer:
             raise ValueError(f"Unknown model_type: {self.model_type}")
 
     def _save_checkpoint(self) -> str:
-        """Save model to artifacts_root/<dataset_name>/checkpoints/."""
-        checkpoint_dir = os.path.join(
-            self.artifacts_root, self.dataset_name, "checkpoints"
-        )
+        """Save model to checkpoints directory."""
+        if self.checkpoint_dir is not None:
+            checkpoint_dir = self.checkpoint_dir
+        else:
+            checkpoint_dir = os.path.join(
+                self.artifacts_root, self.dataset_name, "checkpoints"
+            )
         os.makedirs(checkpoint_dir, exist_ok=True)
         checkpoint_path = os.path.join(checkpoint_dir, f"{self.model_type}_model.pt")
         self._model.save(checkpoint_path)
