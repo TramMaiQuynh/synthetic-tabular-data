@@ -29,6 +29,7 @@ class EvaluationSuite:
         self,
         dataset_name: str,
         artifacts_root: Optional[str] = None,
+        eval_dir: Optional[str] = None,
     ) -> None:
         self.dataset_name = dataset_name
         self.config = ConfigLoader.load_config(dataset_name)
@@ -41,13 +42,16 @@ class EvaluationSuite:
         self.pii_columns = self.schema.get("PII_columns_to_drop", [])
         
         # Resolve output directories
-        if artifacts_root is None:
-            # Default root relative to workspace
-            artifacts_root = os.path.abspath(os.path.join(
-                os.path.dirname(__file__), "..", "..", "artifacts"
-            ))
+        if eval_dir is not None:
+            self.eval_dir = os.path.abspath(eval_dir)
+        else:
+            if artifacts_root is None:
+                # Default root relative to workspace
+                artifacts_root = os.path.abspath(os.path.join(
+                    os.path.dirname(__file__), "..", "..", "artifacts"
+                ))
+            self.eval_dir = os.path.join(artifacts_root, dataset_name, "evaluation")
             
-        self.eval_dir = os.path.join(artifacts_root, dataset_name, "evaluation")
         self.plots_dir = os.path.join(self.eval_dir, "plots")
         
         os.makedirs(self.plots_dir, exist_ok=True)
