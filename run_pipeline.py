@@ -56,6 +56,18 @@ def main():
         default=42,
         help="Global random seed for reproducibility (default: 42)"
     )
+    parser.add_argument(
+        "--cond-col",
+        type=str,
+        default=None,
+        help="Column to apply sampling condition on (e.g. Churn)"
+    )
+    parser.add_argument(
+        "--cond-val",
+        type=str,
+        default=None,
+        help="Category value to fix for conditional sampling (e.g. Yes)"
+    )
     args = parser.parse_args()
 
     # Set global seed IMMEDIATELY — before preprocessing, training, or any
@@ -164,14 +176,20 @@ def main():
     df_preprocessed = pipeline.fit_transform(df_train, model_type=model_type)
     print(f"    Preprocessed shape: {df_preprocessed.shape}")
 
-    pipeline.save_artifacts()
+    # Resolve run directory for this configuration (Run Directory Isolation)
+    dp_suffix = f"dp_eps{target_epsilon}" if enable_dp else "nodp"
+    run_dir = os.path.abspath(os.path.join(artifacts_root, dataset_name, f"{model_type}_{dp_suffix}"))
+    os.makedirs(run_dir, exist_ok=True)
+
+    pipeline.save_artifacts(os.path.join(run_dir, "preprocessing_pipeline.joblib"))
     
     # 2. Training
     print(f"\n[2] Training Generative Model ({model_type.upper()})...")
     trainer = ModelTrainer(
         model_type=model_type,
         dataset_name=dataset_name,
-        artifacts_root=artifacts_root
+        artifacts_root=artifacts_root,
+        checkpoint_dir=os.path.join(run_dir, "checkpoints"),
     )
     
     train_results = trainer.train(
@@ -196,32 +214,42 @@ def main():
         dataset_name=dataset_name,
         artifacts_root=artifacts_root
     )
-    sampler.load()
+    sampler.load(
+        checkpoint_path=os.path.join(run_dir, "checkpoints", f"{model_type}_model.pt"),
+        pipeline_path=os.path.join(run_dir, "preprocessing_pipeline.joblib")
+    )
     
-    df_synthetic = sampler.generate(n_rows=1000)
+    df_synthetic = sampler.generate(
+        n_rows=1000,
+        condition_col=args.cond_col,
+        condition_val=args.cond_val
+    )
     print(f"    Generated synthetic shape: {df_synthetic.shape}")
     
-    # Save output to data/ folder
+    # Save output to data/ folder (default shared path for backward compatibility)
     output_name = f"{dataset_name}_synthetic_output.csv"
     output_csv = os.path.abspath(os.path.join("data", output_name))
     df_synthetic.to_csv(output_csv, index=False)
     print(f"    Saved synthetic samples to: {output_csv}")
     
+    # Save model-specific output to isolated run directory
+    artifact_synth_csv = os.path.join(run_dir, f"{dataset_name}_synthetic.csv")
+    df_synthetic.to_csv(artifact_synth_csv, index=False)
+    print(f"    Saved model-specific synthetic samples to: {artifact_synth_csv}")
+    
     # 4. Evaluation Suite
     print("\n[4] Running Evaluation Suite & Generating Reports...")
-    suite = EvaluationSuite(dataset_name=dataset_name, artifacts_root=artifacts_root)
+    suite = EvaluationSuite(
+        dataset_name=dataset_name,
+        artifacts_root=artifacts_root,
+        eval_dir=os.path.join(run_dir, "evaluation")
+    )
 
     target_col = ConfigLoader.load_schema(dataset_name).get("target_column", "")
     sensitive_col = config.ingestion.quasi_identifiers[0] if config.ingestion.quasi_identifiers else ""
 
     # Wrap the already-fitted Stage-2 pipeline as the numeric loader for
     # privacy metrics (DCR, NNDR, MIA, AIA).
-    # CRITICAL: using the train-fitted pipeline ensures that scaler parameters
-    # (min/max) are estimated exclusively from Real Train, not from the full
-    # dataset.  If we let the orchestrator create its own helper pipeline
-    # (the fallback when pipeline_loader_fn is None), it would refit on
-    # real_df (100%), leaking test-set distribution into normalization bounds
-    # and invalidating DCR and MIA results.
     def _pipeline_loader(df: pd.DataFrame) -> np.ndarray:
         processed = pipeline.transform(df)
         return processed.values.astype("float32")
