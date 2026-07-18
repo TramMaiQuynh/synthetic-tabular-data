@@ -148,6 +148,8 @@ def cmd_train(args: argparse.Namespace) -> int:
 
     # 3. Preprocessing -------------------------------------------------------
     from src.preprocessing.pipeline import PreprocessingPipeline  # noqa: PLC0415
+    from sklearn.model_selection import train_test_split  # noqa: PLC0415
+    import pandas as pd  # noqa: PLC0415
 
     data_path = os.path.abspath(args.data_path)
     if not os.path.exists(data_path):
@@ -159,11 +161,59 @@ def cmd_train(args: argparse.Namespace) -> int:
     df_raw = pipeline.load_data(data_path)
     logger.info("Raw shape: %s", df_raw.shape)
 
-    df_preprocessed = pipeline.fit_transform(df_raw, model_type=model_type)
+    # --- TRAIN / TEST SPLIT ---
+    # The split MUST happen before fit_transform and before training.
+    # This ensures the generative model never sees the hold-out test set,
+    # which is required for valid MIA, DCR Leakage, AIA, and TSTR evaluations.
+    # Fit preprocessing pipeline ONLY on training data to prevent
+    # test-set distribution from leaking into normalization parameters.
+    pii_cols_present = [c for c in pipeline.pii_columns if c in df_raw.columns]
+    df_no_pii = df_raw.drop(columns=pii_cols_present)
+
+    # Attempt stratified split when the target column is categorical
+    # Read target_column from data_schema.yaml (Single Source of Truth)
+    from src.config.config_loader import ConfigLoader  # noqa: PLC0415
+    schema = ConfigLoader.load_schema(args.dataset)
+    target_col_name = schema.get("target_column", "")
+    stratify_series = None
+    if target_col_name and target_col_name in df_no_pii.columns:
+        col = df_no_pii[target_col_name]
+        is_categorical_target = (
+            pd.api.types.is_object_dtype(col)
+            or isinstance(col.dtype, pd.CategoricalDtype)
+            or col.nunique() <= 20
+        )
+        if is_categorical_target and col.value_counts().min() >= 2:
+            stratify_series = col
+
+    seed = getattr(args, "seed", 42)
+    df_train, df_test = train_test_split(
+        df_no_pii,
+        test_size=0.2,
+        random_state=seed,
+        stratify=stratify_series,
+    )
+    df_train = df_train.reset_index(drop=True)
+    df_test  = df_test.reset_index(drop=True)
+    split_type = "stratified" if stratify_series is not None else "random"
+    logger.info("Train/Test split (%s): Train=%d rows, Test=%d rows",
+                split_type, len(df_train), len(df_test))
+    # -------------------------------------
+
+    # Preprocessor is fit ONLY on Real Train — parameters must not leak from test set
+    df_preprocessed = pipeline.fit_transform(df_train, model_type=model_type)
     logger.info("Preprocessed shape: %s", df_preprocessed.shape)
 
     pipeline.save_artifacts()
     logger.info("Preprocessing artifacts saved.")
+
+    # Save train/test split files to artifacts directory for downstream evaluation
+    os.makedirs(os.path.join(artifacts_root, args.dataset), exist_ok=True)
+    train_split_path = os.path.join(artifacts_root, args.dataset, "real_train_split.csv")
+    test_split_path = os.path.join(artifacts_root, args.dataset, "real_test_split.csv")
+    df_train.to_csv(train_split_path, index=False)
+    df_test.to_csv(test_split_path, index=False)
+    logger.info("Saved train/test splits to: %s, %s", train_split_path, test_split_path)
 
     # 4. Model training ------------------------------------------------------
     from src.training.trainer import ModelTrainer  # noqa: PLC0415
@@ -378,6 +428,14 @@ def cmd_evaluate(args: argparse.Namespace) -> int:
             "Using explicit train/test split: train=%s, test=%s",
             real_train_df.shape, real_test_df.shape,
         )
+    else:
+        # Check if saved split files exist in artifacts directory
+        default_train_path = os.path.join(artifacts_root, args.dataset, "real_train_split.csv")
+        default_test_path = os.path.join(artifacts_root, args.dataset, "real_test_split.csv")
+        if os.path.exists(default_train_path) and os.path.exists(default_test_path):
+            logger.info("Auto-detected train/test splits in artifacts root: %s, %s", default_train_path, default_test_path)
+            real_train_df = pd.read_csv(default_train_path)
+            real_test_df = pd.read_csv(default_test_path)
 
     from src.evaluation.orchestrator import EvaluationSuite  # noqa: PLC0415
 
@@ -614,6 +672,8 @@ def _build_parser() -> argparse.ArgumentParser:
                      help="Mini-batch size.")
     hpg.add_argument("--lr",          type=float, default=None, metavar="LR",
                      help="Learning rate (e.g. 2e-4).")
+    hpg.add_argument("--seed",        type=int,   default=42, metavar="N",
+                     help="Global random seed for reproducibility (default: 42).")
     hpg.add_argument("--early-stopping-patience", type=int, default=None, metavar="N",
                      help="Epochs without improvement before stopping (0 = disabled).")
 
