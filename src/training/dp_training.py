@@ -23,7 +23,11 @@ Usage:
         noise_multiplier=None,   # auto-calibrated if None
         backend="auto",          # "opacus" | "custom" | "auto"
     )
-    optimizer = trainer.wrap_optimizer(optimizer, model)
+    result = trainer.wrap_optimizer(optimizer, model)
+    if isinstance(result, tuple):
+        optimizer, model = result  # Opacus returns (optimizer, wrapped_model)
+    else:
+        optimizer = result           # Custom returns optimizer only
 
     # In training loop:
     optimizer.zero_grad()
@@ -44,7 +48,7 @@ from __future__ import annotations
 
 import logging
 import math
-from typing import Optional
+from typing import Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -250,6 +254,7 @@ class DPTrainer:
         self._opacus_available = _detect_opacus()
         self._active_backend: Optional[str] = None
         self._wrapped_optimizer = None
+        self._wrapped_model: Optional[nn.Module] = None  # GradSampleModule for Opacus
         self._privacy_engine = None  # Opacus PrivacyEngine if used
 
         logger.info(
@@ -297,7 +302,7 @@ class DPTrainer:
         dataset_size: int = 10000,
         batch_size: int = 256,
         epochs: int = 100,
-    ) -> "_CustomDPOptimizer":
+    ) -> Union["_CustomDPOptimizer", Tuple["_CustomDPOptimizer", nn.Module]]:
         """
         Wrap an existing optimizer with DP-SGD logic.
 
@@ -309,8 +314,13 @@ class DPTrainer:
             epochs       : Total training epochs.
 
         Returns:
-            A wrapped optimizer with .zero_grad() and .step() replaced by
-            DP-safe equivalents. Also accessible as DPTrainer.wrapped_optimizer.
+            For custom backend: A wrapped optimizer with .zero_grad() and .step()
+            replaced by DP-safe equivalents.
+
+            For Opacus backend: Tuple (wrapped_optimizer, wrapped_model).
+            Callers MUST replace their model reference with wrapped_model
+            to ensure per-sample gradient hooks are used during forward passes.
+            Also accessible as DPTrainer.wrapped_optimizer / DPTrainer.wrapped_model.
         """
         resolved = self._resolve_backend()
         self._active_backend = resolved
@@ -320,7 +330,9 @@ class DPTrainer:
 
         if resolved == "opacus":
             try:
-                return self._wrap_opacus(optimizer, model, noise_mult, batch_size, dataset_size)
+                return self._wrap_opacus(
+                    optimizer, model, noise_mult, batch_size, dataset_size, epochs
+                )
             except Exception as exc:
                 logger.warning(
                     "Opacus wrap_optimizer failed (%s). Falling back to custom backend.", exc
@@ -341,12 +353,59 @@ class DPTrainer:
             batch_size=batch_size,
         )
         self._wrapped_optimizer = wrapped
+        self._wrapped_model = None
         logger.info(
             "DPTrainer using 'custom' backend — noise_multiplier=%.4f, "
             "max_grad_norm=%.2f, batch_size=%d.",
             noise_mult, self.max_grad_norm, batch_size,
         )
         return wrapped
+
+    def _reconstruct_optimizer(
+        self,
+        old_optimizer: torch.optim.Optimizer,
+        new_model: nn.Module,
+    ) -> torch.optim.Optimizer:
+        """
+        Reconstruct an optimizer with the same hyperparameters as `old_optimizer`
+        but pointing to `new_model.parameters()`.
+
+        This is required when ModuleValidator.fix() replaces the model and
+        creates new parameter tensors. The old optimizer would reference stale
+        parameters, causing Opacus to raise:
+            ValueError: Module parameters are different than optimizer Parameters
+        """
+        opt_cls = type(old_optimizer)
+        defaults = old_optimizer.defaults.copy()
+
+        # Group hyperparameters from param_groups (supports per-group configs)
+        # Most optimizers have a single param_group; we preserve all groups
+        new_param_groups = []
+        for group in old_optimizer.param_groups:
+            group_spec = {k: v for k, v in group.items() if k != "params"}
+            new_param_groups.append(group_spec)
+
+        if len(new_param_groups) > 1:
+            # Multiple param groups: create optimizer with list of dicts
+            params_with_groups = []
+            for i, group_spec in enumerate(new_param_groups):
+                params_with_groups.append(
+                    {"params": list(new_model.parameters()), **group_spec}
+                )
+            new_optimizer = opt_cls(params_with_groups, **defaults)
+        else:
+            # Single param group: typical case
+            new_optimizer = opt_cls(new_model.parameters(), **defaults)
+
+        logger.info(
+            "Reconstructed optimizer %s with new model parameters "
+            "(previous optimizer referenced %d old params, "
+            "new optimizer has %d new params).",
+            opt_cls.__name__,
+            sum(p.numel() for p in old_optimizer.param_groups[0]["params"]),
+            sum(p.numel() for p in new_model.parameters()),
+        )
+        return new_optimizer
 
     def _wrap_opacus(
         self,
@@ -355,38 +414,81 @@ class DPTrainer:
         noise_multiplier: float,
         batch_size: int,
         dataset_size: int,
-    ):
-        """Attach Opacus PrivacyEngine to model + optimizer."""
+        epochs: int,
+    ) -> Tuple[torch.optim.Optimizer, nn.Module]:
+        """
+        Attach Opacus PrivacyEngine to model + optimizer.
+
+        Returns:
+            Tuple (dp_optimizer, wrapped_model).
+            Callers MUST update their model reference to wrapped_model.
+
+        Raises:
+            ValueError: If ModuleValidator.fix() creates a new model and the
+                        optimizer cannot be reconstructed.
+        """
         from opacus import PrivacyEngine
         from opacus.validators import ModuleValidator
 
-        # Opacus requires the model to pass validation (no BatchNorm, etc.)
+        # Step 1: Validate and optionally fix model
+        # ModuleValidator.fix() calls clone_module() which deep-copies ALL
+        # parameter tensors. If fix() triggers, we must reconstruct the
+        # optimizer with the new model's parameters.
         if not ModuleValidator.is_valid(model):
             errors = ModuleValidator.validate(model, strict=False)
             logger.warning(
                 "Opacus ModuleValidator found issues: %s. "
-                "Attempting auto-fix (replace BatchNorm -> GroupNorm).",
+                "Attempting auto-fix.",
                 errors,
             )
-            model = ModuleValidator.fix(model)
+            fixed_model = ModuleValidator.fix(model)
+            if fixed_model is not model:
+                # Bug #2 fix: fix() created a new model with new parameter
+                # tensors. Reconstruct optimizer to match.
+                logger.info(
+                    "ModuleValidator.fix() replaced model object. "
+                    "Reconstructing optimizer with new model parameters."
+                )
+                optimizer = self._reconstruct_optimizer(optimizer, fixed_model)
+                model = fixed_model
+            else:
+                # fix() returned the same model (no changes needed)
+                logger.info(
+                    "ModuleValidator.fix() returned same model object. "
+                    "Proceeding with original optimizer."
+                )
 
+        # Step 2: Create a proper DataLoader for Opacus internal accounting
+        # Opacus 1.6+ requires a valid DataLoader (data_loader=None crashes).
+        # The DataLoader is used to compute sample_rate = batch_size / dataset_size.
+        # Since we manage batches manually (not via Opacus DataLoader),
+        # we create a dummy loader with the correct dimensions for accounting.
+        from torch.utils.data import TensorDataset, DataLoader as TDataLoader
+
+        dummy_dataset = TensorDataset(torch.zeros(dataset_size, 1))
+        data_loader = TDataLoader(dummy_dataset, batch_size=batch_size)
+
+        # Step 3: Attach PrivacyEngine
         privacy_engine = PrivacyEngine()
-        model, dp_optimizer, _ = privacy_engine.make_private(
+        wrapped_model, dp_optimizer, _ = privacy_engine.make_private(
             module=model,
             optimizer=optimizer,
-            data_loader=None,  # We manage batches manually
+            data_loader=data_loader,
             noise_multiplier=noise_multiplier,
             max_grad_norm=self.max_grad_norm,
             poisson_sampling=False,
         )
         self._privacy_engine = privacy_engine
         self._wrapped_optimizer = dp_optimizer
+        self._wrapped_model = wrapped_model
+
         logger.info(
             "DPTrainer using Opacus backend — noise_multiplier=%.4f, "
-            "max_grad_norm=%.2f.",
+            "max_grad_norm=%.2f, wrapped_model=%s.",
             noise_multiplier, self.max_grad_norm,
+            type(wrapped_model).__name__,
         )
-        return dp_optimizer
+        return dp_optimizer, wrapped_model
 
     def backward(
         self,
@@ -405,7 +507,12 @@ class DPTrainer:
         if self._active_backend == "custom" and isinstance(optimizer, _CustomDPOptimizer):
             optimizer.backward_and_step(loss)
         elif self._active_backend == "opacus":
-            # Opacus: DP is transparent via hooks on backward + step
+            # Opacus: DP is transparent via hooks on backward + step.
+            # NOTE: If ModelValidator.fix() was NOT triggered, hooks are on the
+            # original model's submodules and fire even without using the
+            # wrapped model for forward passes.
+            # If fix() WAS triggered, hooks are on the fixed model, and the
+            # caller MUST have updated its model reference to use the wrapped model.
             loss.backward()
             optimizer.step()
         else:
@@ -445,3 +552,13 @@ class DPTrainer:
             return eps
 
         return float("inf")
+
+    @property
+    def wrapped_model(self) -> Optional[nn.Module]:
+        """
+        Return the Opacus GradSampleModule-wrapped model, if Opacus backend is active.
+
+        For the custom backend, returns None.
+        Callers should use this model for all forward passes when using Opacus.
+        """
+        return self._wrapped_model
