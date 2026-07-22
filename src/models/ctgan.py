@@ -101,7 +101,7 @@ class CTGANGenerator(nn.Module):
         for h_dim in hidden_dims:
             layers.append(nn.Linear(prev_dim, h_dim))
             layers.append(nn.LayerNorm(h_dim))
-            layers.append(nn.ReLU(inplace=True))
+            layers.append(nn.ReLU(inplace=False))
             prev_dim = h_dim
 
         layers.append(nn.Linear(prev_dim, output_dim))
@@ -165,7 +165,7 @@ class CTGANDiscriminator(nn.Module):
         for h_dim in hidden_dims:
             layers.append(nn.Linear(prev_dim, h_dim))
             layers.append(nn.LayerNorm(h_dim))
-            layers.append(nn.LeakyReLU(0.2, inplace=True))
+            layers.append(nn.LeakyReLU(0.2, inplace=False))
             if dropout_rate > 0:
                 layers.append(nn.Dropout(dropout_rate))
             prev_dim = h_dim
@@ -415,8 +415,13 @@ class TabularCTGAN:
         )
 
         # If dp_trainer provided, wrap discriminator optimizer
+        # Opacus backend returns (optimizer, wrapped_model); custom returns optimizer only
         if dp_trainer is not None:
-            opt_d = dp_trainer.wrap_optimizer(opt_d, self.discriminator)
+            dp_result = dp_trainer.wrap_optimizer(opt_d, self.discriminator)
+            if isinstance(dp_result, tuple):
+                opt_d, self.discriminator = dp_result
+            else:
+                opt_d = dp_result
 
         g_losses: List[float] = []
         d_losses: List[float] = []
@@ -631,8 +636,15 @@ class TabularCTGAN:
             constraint_penalty_weight=checkpoint.get("constraint_penalty_weight", 1.0),
             device=device,
         )
-        instance.generator.load_state_dict(checkpoint["generator_state"])
-        instance.discriminator.load_state_dict(checkpoint["discriminator_state"])
+        # Handle Opacus-wrapped models (state_dict keys have "_module." prefix)
+        gen_state = checkpoint["generator_state"]
+        disc_state = checkpoint["discriminator_state"]
+        if any(k.startswith("_module.") for k in gen_state.keys()):
+            gen_state = {k.replace("_module.", ""): v for k, v in gen_state.items()}
+        if any(k.startswith("_module.") for k in disc_state.keys()):
+            disc_state = {k.replace("_module.", ""): v for k, v in disc_state.items()}
+        instance.generator.load_state_dict(gen_state)
+        instance.discriminator.load_state_dict(disc_state)
         instance._is_trained = True
         logger.info("TabularCTGAN loaded from %s", path)
         return instance
