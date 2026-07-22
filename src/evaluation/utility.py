@@ -27,10 +27,12 @@ class UtilityEvaluator:
         target_col: str,
         continuous_cols: List[str],
         categorical_cols: List[str],
+        exclude_features: Optional[List[str]] = None,
     ) -> None:
         self.target_col = target_col
         self.continuous_cols = continuous_cols
         self.categorical_cols = categorical_cols
+        self.exclude_features = exclude_features or []
         
     def evaluate(
         self,
@@ -41,6 +43,11 @@ class UtilityEvaluator:
         """
         Run TSTR and TRTR and return performance comparison metrics.
         
+        Features listed in self.exclude_features (e.g. duration for Bank Marketing)
+        are dropped before evaluation because they are known at training time but
+        NOT available at inference time in production. Keeping them would produce
+        artificially high TSTR scores (leakage / ceiling effect).
+        
         Args:
             real_train_df: Real training data.
             real_test_df: Real holdout test data.
@@ -49,6 +56,15 @@ class UtilityEvaluator:
         Returns:
             Dict containing TSTR vs TRTR comparison results.
         """
+        # Drop leakage features before utility evaluation
+        if self.exclude_features:
+            existing_exclude = [c for c in self.exclude_features if c in real_train_df.columns]
+            if existing_exclude:
+                logger.info("Excluding leakage features from utility evaluation: %s", existing_exclude)
+                real_train_df = real_train_df.drop(columns=existing_exclude)
+                real_test_df = real_test_df.drop(columns=existing_exclude)
+                synth_df = synth_df.drop(columns=existing_exclude)
+        
         results: Dict[str, Any] = {
             "task": "classification",
             "target_column": self.target_col,
