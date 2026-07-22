@@ -60,7 +60,7 @@ class CTVAEEncoder(nn.Module):
         layers: List[nn.Module] = []
         prev_dim = input_dim
         for h in hidden_dims:
-            layers += [nn.Linear(prev_dim, h), nn.LayerNorm(h), nn.ReLU(inplace=True)]
+            layers += [nn.Linear(prev_dim, h), nn.LayerNorm(h), nn.ReLU(inplace=False)]
             prev_dim = h
 
         self.shared = nn.Sequential(*layers)
@@ -99,7 +99,7 @@ class CTVAEDecoder(nn.Module):
         layers: List[nn.Module] = []
         prev_dim = input_dim
         for h in hidden_dims:
-            layers += [nn.Linear(prev_dim, h), nn.LayerNorm(h), nn.ReLU(inplace=True)]
+            layers += [nn.Linear(prev_dim, h), nn.LayerNorm(h), nn.ReLU(inplace=False)]
             prev_dim = h
 
         layers.append(nn.Linear(prev_dim, output_dim))
@@ -282,7 +282,19 @@ class TabularCTVAE:
         if dp_trainer is not None:
             # Wrap both encoder+decoder as a single module for DP
             combined = nn.ModuleList([self.encoder, self.decoder])
-            optimizer = dp_trainer.wrap_optimizer(optimizer, combined)
+            dp_result = dp_trainer.wrap_optimizer(optimizer, combined)
+            if isinstance(dp_result, tuple):
+                # Opacus backend: returns (optimizer, wrapped_model)
+                # Extract updated encoder/decoder from the wrapped (possibly fixed) model
+                optimizer, wrapped_combined = dp_result
+                internal_combined = getattr(wrapped_combined, '_module', wrapped_combined)
+                if isinstance(internal_combined, nn.ModuleList) and len(internal_combined) == 2:
+                    self.encoder, self.decoder = internal_combined[0], internal_combined[1]
+                # Update combined reference for backward() calls
+                combined = wrapped_combined
+                logger.info("DP-SGD active: updated encoder/decoder from Opacus wrapped model.")
+            else:
+                optimizer = dp_result
             # Disable early stopping when DP is active
             early_stopping_patience = 0
             logger.info("DP-SGD active: early stopping disabled for CTVAE.")
@@ -477,8 +489,15 @@ class TabularCTVAE:
             constraint_penalty_weight=ckpt.get("constraint_penalty_weight", 1.0),
             device=device,
         )
-        instance.encoder.load_state_dict(ckpt["encoder_state"])
-        instance.decoder.load_state_dict(ckpt["decoder_state"])
+        # Handle Opacus-wrapped models (state_dict keys have "_module." prefix)
+        enc_state = ckpt["encoder_state"]
+        dec_state = ckpt["decoder_state"]
+        if any(k.startswith("_module.") for k in enc_state.keys()):
+            enc_state = {k.replace("_module.", ""): v for k, v in enc_state.items()}
+        if any(k.startswith("_module.") for k in dec_state.keys()):
+            dec_state = {k.replace("_module.", ""): v for k, v in dec_state.items()}
+        instance.encoder.load_state_dict(enc_state)
+        instance.decoder.load_state_dict(dec_state)
         instance._is_trained = True
         logger.info("TabularCTVAE loaded from %s", path)
         return instance
