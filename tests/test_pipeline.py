@@ -75,7 +75,7 @@ def test_pipeline_fit_transform_and_artifacts():
     
     # Check original shapes and columns are matching (except indicators and PII)
     # The columns should be in the same order as in df (or at least match the set of columns)
-    assert set(restored_df.columns) == set(df.columns)
+    assert set(restored_df.columns) == set(df.columns) - set(pipeline.pii_columns)
 
 
 def test_pipeline_fit_transform_ctgan():
