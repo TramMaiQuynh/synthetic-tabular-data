@@ -290,7 +290,11 @@ class TabularDiffusion:
         )
 
         if dp_trainer is not None:
-            optimizer = dp_trainer.wrap_optimizer(optimizer, self.denoiser)
+            dp_result = dp_trainer.wrap_optimizer(optimizer, self.denoiser)
+            if isinstance(dp_result, tuple):
+                optimizer, self.denoiser = dp_result
+            else:
+                optimizer = dp_result
             early_stopping_patience = 0
             logger.info("DP-SGD active: early stopping disabled for TabularDiffusion.")
 
@@ -526,7 +530,11 @@ class TabularDiffusion:
             constraint_penalty_weight=ckpt.get("constraint_penalty_weight", 1.0),
             device=device,
         )
-        instance.denoiser.load_state_dict(ckpt["denoiser_state"])
+        # Handle Opacus-wrapped models (state_dict keys have "_module." prefix)
+        denoiser_state = ckpt["denoiser_state"]
+        if any(k.startswith("_module.") for k in denoiser_state.keys()):
+            denoiser_state = {k.replace("_module.", ""): v for k, v in denoiser_state.items()}
+        instance.denoiser.load_state_dict(denoiser_state)
         instance._is_trained = True
         logger.info("TabularDiffusion loaded from %s", path)
         return instance
