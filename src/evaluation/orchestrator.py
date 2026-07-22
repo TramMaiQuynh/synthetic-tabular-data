@@ -180,8 +180,16 @@ class EvaluationSuite:
         )
         
         # 6. Evaluate Machine Learning Utility
+        # Read utility_exclude_features from schema (e.g. duration for Bank Marketing)
+        # These features are dropped before TSTR/TRTR to avoid leakage/ceiling effect
+        utility_exclude = self.schema.get("utility_exclude_features", [])
+        if utility_exclude:
+            logger.info("Utility evaluation will exclude leakage features: %s", utility_exclude)
         logger.info("[3/5] Evaluating Machine Learning Utility (TSTR vs TRTR)...")
-        utility_evaluator = UtilityEvaluator(t_col, active_continuous, active_categorical)
+        utility_evaluator = UtilityEvaluator(
+            t_col, active_continuous, active_categorical,
+            exclude_features=utility_exclude,
+        )
         utility_results = utility_evaluator.evaluate(real_train_df, real_test_df, synth_df)
         
         # 7. Generate Visual Overlays
