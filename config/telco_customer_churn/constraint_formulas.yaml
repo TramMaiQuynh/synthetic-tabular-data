@@ -1,0 +1,29 @@
+# Business Logic Constraint Formulas for Telco Customer Churn
+# ---------------------------------------------------------------------------
+# Each constraint represents a known mathematical relationship between columns
+# that MUST hold for any valid data point. These are used by the Fidelity
+# Assessor to evaluate whether generative models have learned the underlying
+# business logic, not just marginal distributions.
+#
+# Format:
+#   - expression: "<result_col> = <expr>"
+#     metric: "mape"   (Mean Absolute Percentage Error)
+#     tolerance: 0.1   (maximum acceptable MAPE before flagging violation)
+#     description: "Human-readable explanation"
+#
+# Reference: eda.txt line 101
+#   "TotalCharges ≈ tenure * MonthlyCharges"
+#   This is a hard mathematical constraint: total charges = number of months
+#   of service × monthly charge. Models that violate this (e.g., tenure=2,
+#   MonthlyCharges=20, TotalCharges=5000) have failed to learn the domain logic.
+#
+# NOTE: MAPE is computed per-row and averaged. Rows where true_value == 0
+# are excluded from the MAPE calculation to avoid division-by-zero errors.
+# A separate "zero_rate" metric tracks the fraction of rows where true_value
+# is near-zero (indicating new customers with no charges yet).
+
+constraints:
+  - expression: "TotalCharges = tenure * MonthlyCharges"
+    metric: "mape"
+    tolerance: 0.15
+    description: "Total charges must equal tenure multiplied by monthly charge"

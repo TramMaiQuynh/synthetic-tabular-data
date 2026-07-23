@@ -1,4 +1,5 @@
-PII_columns_to_drop: []
+PII_columns_to_drop:
+- fnlwgt
 categorical_features:
   workclass:
   - Federal-gov
@@ -114,9 +115,6 @@ continuous_features:
   age:
     min: 17.0
     max: 90.0
-  fnlwgt:
-    min: 12285.0
-    max: 1484705.0
   education-num:
     min: 1.0
     max: 16.0

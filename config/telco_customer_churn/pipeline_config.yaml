@@ -1,6 +1,6 @@
 dataset_name: telco_customer_churn
 imputation_strategy:
-  TotalCharges: mean
+  TotalCharges: median
   tenure: median
   MonthlyCharges: median
   gender: mode

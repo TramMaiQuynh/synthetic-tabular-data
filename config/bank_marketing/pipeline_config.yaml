@@ -1,0 +1,38 @@
+dataset_name: bank_marketing
+imputation_strategy:
+  age: median
+  balance: median
+  duration: median
+  campaign: median
+  pdays: median
+  previous: median
+  job: mode
+  marital: mode
+  education: mode
+  default: mode
+  housing: mode
+  loan: mode
+  contact: mode
+  day: mode
+  month: mode
+  poutcome: mode
+  y: mode
+encoding_strategy:
+  job: label
+  marital: onehot
+  education: label
+  default: onehot
+  housing: onehot
+  loan: onehot
+  contact: onehot
+  day: label
+  month: label
+  poutcome: onehot
+  y: onehot
+scaling_strategy:
+  age: minmax
+  balance: standard
+  duration: minmax
+  campaign: log1p
+  pdays: minmax
+  previous: log1p

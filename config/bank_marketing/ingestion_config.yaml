@@ -1,0 +1,28 @@
+columns:
+- age
+- job
+- marital
+- education
+- default
+- balance
+- housing
+- loan
+- contact
+- day
+- month
+- duration
+- campaign
+- pdays
+- previous
+- poutcome
+- y
+has_header: true
+na_values:
+- unknown
+separator: ;
+quasi_identifiers:
+- age
+- job
+- education
+- marital
+target_column: y
