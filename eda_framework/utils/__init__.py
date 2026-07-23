@@ -1,3 +1,0 @@
-"""
-EDA Framework Utilities Package
-"""
