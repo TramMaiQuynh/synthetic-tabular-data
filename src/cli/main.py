@@ -542,6 +542,7 @@ def cmd_hpo(args: argparse.Namespace) -> int:
         continuous_cols=pipeline.continuous_cols,
         categorical_cols=pipeline.categorical_cols,
         constraint_expressions=constraint_expressions,
+        pipeline=pipeline,
     )
 
     logger.info("=== HPO Best Parameters ===")
