@@ -169,6 +169,32 @@ class EvaluationSuite:
         logger.info("[1/5] Evaluating Statistical Fidelity...")
         fidelity_assessor = FidelityAssessor(active_continuous, active_categorical)
         fidelity_results = fidelity_assessor.evaluate(real_df, synth_df)
+
+        # 4b. Evaluate Business Logic Constraints (Fidelity extension)
+        # Load constraint formulas from dataset config if available.
+        # This checks whether synthetic data respects known cross-column
+        # mathematical relationships (e.g., TotalCharges = tenure * MonthlyCharges).
+        logger.info("[1b/5] Evaluating Business Logic Constraints...")
+        constraint_formulas_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "..", "config", self.dataset_name, "constraint_formulas.yaml",
+        )
+        if os.path.exists(constraint_formulas_path):
+            constraint_fidelity = fidelity_assessor.evaluate_constraints(
+                real_df, synth_df,
+                constraint_formulas_path=constraint_formulas_path,
+            )
+            logger.info(
+                "Constraint fidelity: avg MAPE=%.4f, %d constraints evaluated.",
+                constraint_fidelity.get("avg_constraint_mape", float("nan")),
+                len(constraint_fidelity.get("constraint_results", [])),
+            )
+        else:
+            constraint_fidelity = {
+                "constraint_results": [],
+                "avg_constraint_mape": float("nan"),
+            }
+            logger.info("No constraint formulas found at '%s'. Skipping.", constraint_formulas_path)
         
         # 5. Audit Privacy Leakage
         logger.info("[2/5] Evaluating Privacy Leakage (DCR, NNDR, MIA, AIA)...")
@@ -233,6 +259,8 @@ class EvaluationSuite:
             rel_plots,
             target_col=t_col,
             sensitive_col=s_col,
+            constraint_fidelity=constraint_fidelity,
+            dataset_name=self.dataset_name,
         )
         
         logger.info("EvaluationSuite run complete. Saved reports to %s", self.eval_dir)

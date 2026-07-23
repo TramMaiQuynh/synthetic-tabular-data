@@ -11,11 +11,15 @@ Computes statistical similarity metrics between real and synthetic dataframes:
 """
 
 import logging
+import os
+import re
+from typing import List, Dict, Any, Optional
+
 import numpy as np
 import pandas as pd
 import scipy.stats as ss
 from scipy.spatial.distance import jensenshannon
-from typing import List, Dict, Any
+import yaml
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +38,12 @@ def compute_wasserstein_distance(real_series: pd.Series, synth_series: pd.Series
     r_vals = real_series.dropna().values.astype(np.float64)
     s_vals = synth_series.dropna().values.astype(np.float64)
     if len(r_vals) == 0 or len(s_vals) == 0:
-        return 0.0
+        # Return NaN to mark the computation as invalid. Returning 0.0 would
+        # incorrectly indicate perfect alignment between two distributions
+        # when one or both are entirely empty/NaN. NaN propagates correctly
+        # through downstream aggregation (e.g., np.nanmean) and ensures
+        # failed computations are not silently treated as perfect matches.
+        return float("nan")
 
     # Normalize both series to [0, 1] using real data range for scale-invariance
     r_min, r_max = r_vals.min(), r_vals.max()
@@ -66,7 +75,11 @@ def compute_js_divergence(real_series: pd.Series, synth_series: pd.Series) -> fl
     except TypeError:
         union_cats.sort(key=str)
     if not union_cats:
-        return 0.0
+        # Return NaN when no categories exist in either distribution.
+        # Returning 0.0 would incorrectly indicate perfect alignment between
+        # two non-existent distributions. NaN ensures downstream aggregation
+        # (e.g., np.nanmean) properly excludes this invalid computation.
+        return float("nan")
         
     # Construct probability distributions
     p = np.array([r_counts.get(cat, 0) for cat in union_cats], dtype=np.float64)
@@ -76,7 +89,13 @@ def compute_js_divergence(real_series: pd.Series, synth_series: pd.Series) -> fl
     p_sum = p.sum()
     q_sum = q.sum()
     if p_sum == 0 or q_sum == 0:
-        return 1.0 if (p_sum > 0 or q_sum > 0) else 0.0
+        # Return NaN when both distributions are empty (p_sum == 0 and q_sum == 0).
+        # Returning 0.0 would incorrectly indicate perfect alignment between
+        # two non-existent distributions. NaN ensures downstream aggregation
+        # (e.g., np.nanmean) properly excludes this invalid computation.
+        # When only one side is empty (but the other has mass), return 1.0
+        # (maximally divergent) which is mathematically correct.
+        return 1.0 if (p_sum > 0 or q_sum > 0) else float("nan")
         
     p = p / p_sum
     q = q / q_sum
@@ -215,10 +234,181 @@ class FidelityAssessor:
         
         return results
 
+    def evaluate_constraints(
+        self,
+        real_df: pd.DataFrame,
+        synth_df: pd.DataFrame,
+        constraint_formulas_path: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Evaluate business logic constraint fidelity.
+
+        Loads constraint formulas from a YAML file (e.g.,
+        config/<dataset>/constraint_formulas.yaml) and checks whether the
+        synthetic data satisfies each constraint.
+
+        For each constraint of the form "result_col = expr", the method:
+          1. Computes the expected value (expr) from the synthetic data.
+          2. Computes the Mean Absolute Percentage Error (MAPE) between
+             expected and actual values.
+          3. Reports the fraction of rows where the constraint is violated
+             beyond a configurable tolerance.
+
+        This is a critical fidelity check: generative models that only match
+        marginal distributions but fail to learn cross-column business logic
+        (e.g., TotalCharges = tenure * MonthlyCharges) are not truly faithful
+        to the data-generating process.
+
+        Args:
+            real_df: Real DataFrame (used for reference, e.g., to compute
+                     the real-data MAPE for comparison).
+            synth_df: Synthetic DataFrame to evaluate.
+            constraint_formulas_path: Path to YAML file with constraint
+                                      definitions. If None, the method
+                                      returns an empty result.
+
+        Returns:
+            dict with keys:
+              'constraint_results': list of per-constraint dicts, each with:
+                  - 'expression': the constraint expression string.
+                  - 'description': human-readable description.
+                  - 'mape': Mean Absolute Percentage Error on synthetic data.
+                  - 'real_mape': MAPE on real data (for comparison).
+                  - 'violation_rate': fraction of rows with |error| > tolerance.
+                  - 'tolerance': the tolerance threshold used.
+              'avg_constraint_mape': average MAPE across all constraints.
+        """
+        if constraint_formulas_path is None or not os.path.exists(constraint_formulas_path):
+            return {
+                "constraint_results": [],
+                "avg_constraint_mape": float("nan"),
+            }
+
+        with open(constraint_formulas_path, "r", encoding="utf-8") as f:
+            config = yaml.safe_load(f)
+
+        constraints = config.get("constraints", [])
+        if not constraints:
+            return {
+                "constraint_results": [],
+                "avg_constraint_mape": float("nan"),
+            }
+
+        results = []
+        for c in constraints:
+            expression = c.get("expression", "")
+            metric = c.get("metric", "mape")
+            tolerance = c.get("tolerance", 0.15)
+            description = c.get("description", "")
+
+            # Parse "result_col = expr" pattern
+            # e.g., "TotalCharges = tenure * MonthlyCharges"
+            match = re.match(r"^\s*(\w+)\s*=\s*(.+)\s*$", expression)
+            if not match:
+                logger.warning("Cannot parse constraint expression: %s", expression)
+                continue
+
+            result_col = match.group(1)
+            expr_str = match.group(2).strip()
+
+            if result_col not in synth_df.columns:
+                logger.warning(
+                    "Result column '%s' not found in synthetic data. "
+                    "Skipping constraint: %s",
+                    result_col, expression,
+                )
+                continue
+
+            # Evaluate the expression on synthetic data
+            try:
+                expected = synth_df.eval(expr_str)
+            except Exception as exc:
+                logger.warning(
+                    "Failed to evaluate expression '%s' on synthetic data: %s",
+                    expr_str, exc,
+                )
+                continue
+
+            actual = pd.to_numeric(synth_df[result_col], errors="coerce")
+
+            # Compute per-row absolute percentage error
+            # Avoid division by zero: skip rows where expected == 0
+            valid_mask = (expected != 0) & expected.notna() & actual.notna()
+            n_valid = valid_mask.sum()
+            n_total = len(synth_df)
+
+            if n_valid == 0:
+                mape = float("nan")
+                violation_rate = float("nan")
+            else:
+                abs_pct_error = (
+                    (actual[valid_mask] - expected[valid_mask]).abs()
+                    / expected[valid_mask].abs()
+                )
+                mape = float(abs_pct_error.mean())
+                violation_rate = float((abs_pct_error > tolerance).mean())
+
+            # Compute real-data MAPE for comparison (same expression)
+            real_mape = float("nan")
+            if result_col in real_df.columns:
+                try:
+                    real_expected = real_df.eval(expr_str)
+                    real_actual = pd.to_numeric(
+                        real_df[result_col], errors="coerce"
+                    )
+                    real_valid = (
+                        (real_expected != 0)
+                        & real_expected.notna()
+                        & real_actual.notna()
+                    )
+                    if real_valid.sum() > 0:
+                        real_ape = (
+                            (real_actual[real_valid] - real_expected[real_valid]).abs()
+                            / real_expected[real_valid].abs()
+                        )
+                        real_mape = float(real_ape.mean())
+                except Exception:
+                    pass
+
+            results.append({
+                "expression": expression,
+                "description": description,
+                "mape": mape,
+                "real_mape": real_mape,
+                "violation_rate": violation_rate,
+                "tolerance": tolerance,
+                "n_valid": int(n_valid),
+                "n_total": int(n_total),
+            })
+
+        avg_mape = float(
+            np.mean([r["mape"] for r in results if not np.isnan(r["mape"])])
+        ) if results else float("nan")
+
+        return {
+            "constraint_results": results,
+            "avg_constraint_mape": avg_mape,
+        }
+
     def _compute_mixed_correlation_matrix(self, df: pd.DataFrame, columns: List[str]) -> pd.DataFrame:
         """Helper to build a mixed correlation matrix for the specified columns."""
         n = len(columns)
-        corr_matrix = pd.DataFrame(np.eye(n), index=columns, columns=columns)
+        # Initialize with NaN (not 0.0) so that uncomputed pairs are explicitly
+        # marked as invalid. Using np.eye(n) would set off-diagonal elements
+        # to 0.0, which would inject false "zero correlation" signals when
+        # columns are missing or computation fails (continue is hit). NaN
+        # ensures these invalid entries are excluded by np.nanmean in the
+        # correlation_difference aggregation. The diagonal is set to 1.0
+        # (self-correlation) after initialization.
+        corr_matrix = pd.DataFrame(
+            np.full((n, n), np.nan, dtype=np.float64), index=columns, columns=columns
+        )
+        # Set diagonal to 1.0 (self-correlation). Use .copy() to ensure
+        # the underlying array is writable, as DataFrame.values may be
+        # read-only in certain pandas/numpy versions.
+        corr_values = corr_matrix.values.copy()
+        np.fill_diagonal(corr_values, 1.0)
+        corr_matrix = pd.DataFrame(corr_values, index=columns, columns=columns)
         
         # Process each pair (upper triangle only)
         for i in range(n):
@@ -227,9 +417,10 @@ class FidelityAssessor:
                 col_j = columns[j]
                 
                 if col_i not in df.columns or col_j not in df.columns:
+                    # Leave as NaN — column missing from data, cannot compute.
                     continue
                     
-                val = 0.0
+                val = float("nan")
                 is_i_cont = col_i in self.continuous_cols
                 is_j_cont = col_j in self.continuous_cols
                 
@@ -251,10 +442,16 @@ class FidelityAssessor:
                         val = compute_correlation_ratio(df[cat_col], df[cont_col])
                 except Exception as exc:
                     logger.debug("Failed to compute correlation for %s & %s: %s", col_i, col_j, exc)
-                    val = 0.0
+                    # Keep val as NaN to mark computation failure. Setting to
+                    # 0.0 would inject a false "no correlation" signal that
+                    # skews the correlation_difference metric. NaN is properly
+                    # excluded by np.nanmean in the aggregation step.
+                    val = float("nan")
                     
-                if np.isnan(val):
-                    val = 0.0
+                # Preserve NaN values: do NOT coerce to 0.0. NaN indicates
+                # a failed/invalid computation that should be excluded from
+                # downstream aggregation (np.nanmean), not treated as a
+                # valid "zero correlation" result.
                     
                 corr_matrix.loc[col_i, col_j] = val
                 corr_matrix.loc[col_j, col_i] = val

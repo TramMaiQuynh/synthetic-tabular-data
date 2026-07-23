@@ -11,7 +11,7 @@ import html
 import datetime
 import logging
 import numpy as np
-from typing import Dict, Any, Tuple
+from typing import Dict, Any, Tuple, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -29,17 +29,29 @@ class ComplianceReporter:
         fidelity_results: Dict[str, Any],
         privacy_results: Dict[str, Any],
         utility_results: Dict[str, Any],
-        relative_plot_paths: Dict[str, str], # paths to grid, corr, dcr relative to output_dir
+        relative_plot_paths: Dict[str, str],
         target_col: str = "",
         sensitive_col: str = "",
+        constraint_fidelity: Optional[Dict[str, Any]] = None,
+        dataset_name: str = "",
     ) -> Tuple[str, str]:
         """
         Generate Markdown and HTML reports.
         
-        Returns the absolute paths to the saved Markdown and HTML files.
+        Args:
+            constraint_fidelity: Output of FidelityAssessor.evaluate_constraints()
+            dataset_name: Dataset name (for dataset-specific warnings).
         """
-        md_content = self._build_markdown(fidelity_results, privacy_results, utility_results, relative_plot_paths, target_col, sensitive_col)
-        html_content = self._build_html(fidelity_results, privacy_results, utility_results, relative_plot_paths, target_col, sensitive_col)
+        md_content = self._build_markdown(
+            fidelity_results, privacy_results, utility_results,
+            relative_plot_paths, target_col, sensitive_col,
+            constraint_fidelity or {}, dataset_name,
+        )
+        html_content = self._build_html(
+            fidelity_results, privacy_results, utility_results,
+            relative_plot_paths, target_col, sensitive_col,
+            constraint_fidelity or {}, dataset_name,
+        )
         
         md_path = os.path.join(self.output_dir, "compliance_report.md")
         html_path = os.path.join(self.output_dir, "compliance_report.html")
@@ -61,6 +73,8 @@ class ComplianceReporter:
         plots: Dict[str, str],
         target_col: str,
         sensitive_col: str,
+        constraint_fidelity: Dict[str, Any],
+        dataset_name: str,
     ) -> str:
         """Construct the Markdown report content."""
         date_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -83,13 +97,11 @@ class ComplianceReporter:
         mia_auc = privacy.get("mia_auc", 0.5)
         
         # Determine status badges
-        # Compute ML utility status from actual model performance
         utility_task = utility.get("task", "unknown")
         utility_metrics = utility.get("metrics", {})
         utility_status = "🟢 GOOD"
         utility_desc = "Measures prediction capacity on synthetic training data."
         if utility_metrics:
-            # Compute average utility drop (TRTR - TSTR)
             drops = []
             for model_name, score_dict in utility_metrics.items():
                 trtr = score_dict.get("TRTR", {})
@@ -155,7 +167,52 @@ class ComplianceReporter:
             "",
             "---",
             "",
-            "## 3. Privacy & Memorization Audit",
+            "## 3. Business Logic Constraint Fidelity",
+            "",
+        ])
+        
+        # Constraint fidelity section
+        constraint_results = constraint_fidelity.get("constraint_results", [])
+        if constraint_results:
+            avg_constraint_mape = constraint_fidelity.get("avg_constraint_mape", float("nan"))
+            lines.append(f"**Average Constraint MAPE:** {avg_constraint_mape:.4f}" if not np.isnan(avg_constraint_mape) else "**Average Constraint MAPE:** N/A")
+            lines.append("")
+            lines.append("| Expression | MAPE (Synthetic) | MAPE (Real) | Violation Rate | Tolerance | Status |")
+            lines.append("|---|---|---|---|---|---|")
+            
+            for cr in constraint_results:
+                mape = cr.get("mape", float("nan"))
+                real_mape = cr.get("real_mape", float("nan"))
+                violation = cr.get("violation_rate", float("nan"))
+                tolerance = cr.get("tolerance", 0.15)
+                expression = cr.get("expression", "")
+                description = cr.get("description", "")
+                
+                mape_str = f"{mape:.4f}" if not np.isnan(mape) else "N/A"
+                real_str = f"{real_mape:.4f}" if not np.isnan(real_mape) else "N/A"
+                violation_str = f"{violation*100:.1f}%" if not np.isnan(violation) else "N/A"
+                
+                if not np.isnan(mape) and mape <= tolerance:
+                    status_icon = "🟢 Satisfied"
+                elif not np.isnan(mape):
+                    status_icon = "🔴 Violated"
+                else:
+                    status_icon = "⚪ Unknown"
+                
+                lines.append(
+                    f"| `{expression}` | {mape_str} | {real_str} | {violation_str} | {tolerance} | {status_icon} |"
+                )
+            
+            lines.append("")
+            lines.append(f"*{constraint_results[0].get('description', '')}*")
+        else:
+            lines.append("_No business logic constraints defined for this dataset._")
+        
+        lines.extend([
+            "",
+            "---",
+            "",
+            "## 4. Privacy & Memorization Audit",
             "",
             f"- **Distance to Closest Record (DCR) Mean:** {privacy.get('dcr_mean', 0.0):.4f} (Normalized L2)",
             f"- **Distance to Closest Record (DCR) Min:** {privacy.get('dcr_min', 0.0):.4f}",
@@ -191,11 +248,25 @@ class ComplianceReporter:
         lines.extend([
             "---",
             "",
-            "## 4. Machine Learning Utility (TSTR Framework)",
+            "## 5. Machine Learning Utility (TSTR Framework)",
             "",
             f"**Task Type:** {utility.get('task', 'unknown').upper()}",
             f"**Target Column:** `{target_col}`",
             "",
+        ])
+        
+        # Dataset-specific utility warnings
+        if dataset_name == "adult_income":
+            lines.extend([
+                "> **⚠️ Caution:** The `adult_income` dataset contains columns `capital-gain` and `capital-loss` ",
+                "> which have a structural correlation with the target `income` (they are components of total income). ",
+                "> Predictive models trained on synthetic data may show artificially high TSTR scores because ",
+                "> the generative model can easily reproduce this structural relationship. The reported Utility ",
+                "> numbers may be optimistically biased and should be interpreted with this limitation in mind.",
+                "",
+            ])
+        
+        lines.extend([
             "| Model Name | TRTR Score (Train Real) | TSTR Score (Train Synthetic) | Difference | Status |",
             "|---|---|---|---|---|",
         ])
@@ -228,7 +299,7 @@ class ComplianceReporter:
             "",
             "---",
             "",
-            "## 5. Visual Distribution Overlays",
+            "## 6. Visual Distribution Overlays",
             "",
             "### Feature Distributions Overlay",
             f"![Distributions Grid]({plots.get('distributions')})",
@@ -251,6 +322,8 @@ class ComplianceReporter:
         plots: Dict[str, str],
         target_col: str,
         sensitive_col: str,
+        constraint_fidelity: Dict[str, Any],
+        dataset_name: str,
     ) -> str:
         """Construct the self-contained HTML report with CSS styling."""
         date_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -262,7 +335,7 @@ class ComplianceReporter:
         avg_corr_diff = fidelity.get("correlation_difference", 0.0)
         mia_auc = privacy.get("mia_auc", 0.5)
         
-        # Compute ML utility status dynamically from actual model performance
+        # Compute ML utility status
         utility_task = utility.get("task", "unknown")
         utility_metrics = utility.get("metrics", {})
         drops = []
@@ -293,7 +366,7 @@ class ComplianceReporter:
             util_badge = "status-green"
             util_label = "EVALUATED"
 
-        # Compute status strings & colors
+        # Compute privacy status
         if dcr_leakage < 1.0 and mia_auc <= 0.65:
             priv_badge = "status-green"
             priv_label = "SECURE"
@@ -304,6 +377,7 @@ class ComplianceReporter:
             priv_badge = "status-yellow"
             priv_label = "WARNING"
             
+        # Compute fidelity status
         avg_wasserstein = np.mean(list(fidelity.get("wasserstein", {}).values())) if fidelity.get("wasserstein") else 0.0
         if avg_js < 0.05 and avg_wasserstein < 0.05 and avg_corr_diff < 0.1:
             fid_badge = "status-green"
@@ -314,6 +388,86 @@ class ComplianceReporter:
         else:
             fid_badge = "status-yellow"
             fid_label = "MEDIUM FIDELITY"
+
+        # Build constraint table HTML
+        constraint_results = constraint_fidelity.get("constraint_results", [])
+        constraint_html = ""
+        if constraint_results:
+            avg_constraint_mape = constraint_fidelity.get("avg_constraint_mape", float("nan"))
+            constraint_html += f"""
+        <section>
+            <h2>3. Business Logic Constraint Fidelity</h2>
+            <p><strong>Average Constraint MAPE:</strong> <code>{avg_constraint_mape:.4f}</code> (lower = better)</p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Expression</th>
+                        <th>MAPE (Synthetic)</th>
+                        <th>MAPE (Real)</th>
+                        <th>Violation Rate</th>
+                        <th>Tolerance</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>"""
+            for cr in constraint_results:
+                mape = cr.get("mape", float("nan"))
+                real_mape = cr.get("real_mape", float("nan"))
+                violation = cr.get("violation_rate", float("nan"))
+                tolerance = cr.get("tolerance", 0.15)
+                expression = cr.get("expression", "")
+                description = cr.get("description", "")
+                
+                mape_str = f"{mape:.4f}" if not np.isnan(mape) else "N/A"
+                real_str = f"{real_mape:.4f}" if not np.isnan(real_mape) else "N/A"
+                violation_str = f"{violation*100:.1f}%" if not np.isnan(violation) else "N/A"
+                
+                if not np.isnan(mape) and mape <= tolerance:
+                    status_badge = "status-green"
+                    status_text = "SATISFIED"
+                elif not np.isnan(mape):
+                    status_badge = "status-red"
+                    status_text = "VIOLATED"
+                else:
+                    status_badge = "status-yellow"
+                    status_text = "UNKNOWN"
+                
+                constraint_html += f"""
+                    <tr>
+                        <td><code>{html.escape(expression)}</code></td>
+                        <td>{mape_str}</td>
+                        <td>{real_str}</td>
+                        <td>{violation_str}</td>
+                        <td>{tolerance}</td>
+                        <td><span class="badge {status_badge}">{status_text}</span></td>
+                    </tr>"""
+            constraint_html += """
+                </tbody>
+            </table>"""
+            if constraint_results and constraint_results[0].get("description"):
+                constraint_html += f"""
+            <p><em>{html.escape(constraint_results[0]['description'])}</em></p>"""
+            constraint_html += """
+        </section>"""
+        else:
+            constraint_html = """
+        <section>
+            <h2>3. Business Logic Constraint Fidelity</h2>
+            <p><em>No business logic constraints defined for this dataset.</em></p>
+        </section>"""
+
+        # Build utility warning for Adult dataset
+        utility_warning = ""
+        if dataset_name == "adult_income":
+            utility_warning = """
+            <div style="background-color: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 15px; margin: 15px 0;">
+                <strong>⚠️ Caution:</strong> The <code>adult_income</code> dataset contains columns 
+                <code>capital-gain</code> and <code>capital-loss</code> which have a structural correlation 
+                with the target <code>income</code> (they are components of total income). Predictive models 
+                trained on synthetic data may show artificially high TSTR scores because the generative model 
+                can easily reproduce this structural relationship. The reported Utility numbers may be 
+                optimistically biased.
+            </div>"""
 
         html_report = f"""<!DOCTYPE html>
 <html lang="en">
@@ -544,8 +698,10 @@ class ComplianceReporter:
             <p><strong>Average Correlation Difference (Pearson/Cramer/Ratio):</strong> <code>{avg_corr_diff:.4f}</code></p>
         </section>
 
+        {constraint_html}
+
         <section>
-            <h2>3. Privacy & Memorization Audit</h2>
+            <h2>{'4. Privacy & Memorization Audit' if constraint_results else '4. Privacy & Memorization Audit'}</h2>
             <div class="card-grid">
                 <div class="card">
                     <h4>MIA Attacker AUC</h4>
@@ -555,7 +711,7 @@ class ComplianceReporter:
                 <div class="card">
                     <h4>DCR Leakage Percentage</h4>
                     <div class="value">{dcr_leakage:.2f}%</div>
-                    <p style="font-size: 12px; margin: 5px 0 0 0; color:#666;">Share of rows with L2 distance &lt; {dcr_threshold:.4f}</p>
+                    <p style="font-size: 12px; margin: 5px 0 0 0; color:#666;">Share of rows with L2 distance < {dcr_threshold:.4f}</p>
                 </div>
                 <div class="card">
                     <h4>DCR Mean Distance</h4>
@@ -607,12 +763,16 @@ class ComplianceReporter:
                     </tbody>
                 </table>"""
 
+        sec5_label = "5. Machine Learning Utility (TSTR Framework)"
+        sec6_label = "6. Visual Distribution Overlays"
+
         html_report += f"""
         </section>
 
         <section>
-            <h2>4. Machine Learning Utility (TSTR Framework)</h2>
+            <h2>{sec5_label}</h2>
             <p>Predictive ML models trained on synthetic data vs real data, evaluated on the real holdout test set.</p>
+            {utility_warning}
             <table>
                 <thead>
                     <tr>
@@ -663,7 +823,7 @@ class ComplianceReporter:
         </section>
 
         <section>
-            <h2>5. Visual Distribution Overlays</h2>
+            <h2>{sec6_label}</h2>
             
             <h3>Feature Distributions Overlay</h3>
             <div class="img-container">
